@@ -94,6 +94,16 @@ const OwnerDashboard = () => {
     }
   ];
 
+  const getChangeColor = (changeType: "positive" | "negative" | "neutral") => {
+    if (changeType === "positive") {
+      return "text-rental-trust-green";
+    } else if (changeType === "negative") {
+      return "text-red-500";
+    } else {
+      return "text-rental-navy-500";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardHeader userRole="owner" />
@@ -123,10 +133,7 @@ const OwnerDashboard = () => {
                       <div>
                         <p className="text-sm text-rental-navy-500">{stat.title}</p>
                         <p className="text-2xl font-bold text-rental-navy-800">{stat.value}</p>
-                        <p className={`text-sm ${
-                          stat.changeType === 'positive' ? 'text-rental-trust-green' : 
-                          stat.changeType === 'negative' ? 'text-red-500' : 'text-rental-navy-500'
-                        }`}>
+                        <p className={`text-sm ${getChangeColor(stat.changeType)}`}>
                           {stat.change}
                         </p>
                       </div>

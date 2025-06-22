@@ -4,10 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useState } from "react";
 import { 
   Car, Bike, MapPin, Star, Battery, Clock, Shield, 
   Navigation, Phone, MessageCircle, Calendar 
 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Vehicle {
   id: string;
@@ -32,6 +36,16 @@ interface VehicleDetailsModalProps {
 }
 
 const VehicleDetailsModal = ({ vehicle, onClose, userRole }: VehicleDetailsModalProps) => {
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [bookingData, setBookingData] = useState({
+    startDate: '',
+    endDate: '',
+    startTime: '',
+    endTime: '',
+    totalDays: 1
+  });
+  const { toast } = useToast();
+
   const getVehicleIcon = () => {
     switch (vehicle.type) {
       case 'bike': return <Bike className="w-6 h-6" />;
@@ -50,11 +64,175 @@ const VehicleDetailsModal = ({ vehicle, onClose, userRole }: VehicleDetailsModal
     }
   };
 
-  const handleBookNow = () => {
-    console.log('Booking vehicle:', vehicle.id);
-    // Here you would implement the booking logic
+  const calculateTotalPrice = () => {
+    return vehicle.price * bookingData.totalDays;
+  };
+
+  const handleDateChange = (field: string, value: string) => {
+    setBookingData(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Calculate total days when both dates are set
+      if (updated.startDate && updated.endDate) {
+        const start = new Date(updated.startDate);
+        const end = new Date(updated.endDate);
+        const timeDiff = end.getTime() - start.getTime();
+        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        updated.totalDays = dayDiff > 0 ? dayDiff : 1;
+      }
+      
+      return updated;
+    });
+  };
+
+  const handleBookingSubmit = () => {
+    if (!bookingData.startDate || !bookingData.endDate || !bookingData.startTime || !bookingData.endTime) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all booking details.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Simulate booking process
+    toast({
+      title: "Booking Confirmed!",
+      description: `Your ${vehicle.name} has been booked for ${bookingData.totalDays} day(s). Total: ₹${calculateTotalPrice()}`,
+    });
+    
+    console.log('Booking submitted:', {
+      vehicleId: vehicle.id,
+      ...bookingData,
+      totalPrice: calculateTotalPrice()
+    });
+    
     onClose();
   };
+
+  const handleBookNow = () => {
+    setShowBookingForm(true);
+  };
+
+  if (showBookingForm) {
+    return (
+      <Dialog open onOpenChange={onClose}>
+        <DialogContent className="max-w-lg mx-auto">
+          <DialogHeader>
+            <DialogTitle>Book {vehicle.name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Vehicle Summary */}
+            <Card className="bg-rental-teal-50 border-rental-teal-200">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-10 h-10 rounded-lg ${getTypeColor()} flex items-center justify-center text-white`}>
+                    {getVehicleIcon()}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{vehicle.name}</h3>
+                    <p className="text-sm text-rental-navy-600">₹{vehicle.price}/day</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Booking Form */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={bookingData.startDate}
+                  onChange={(e) => handleDateChange('startDate', e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={bookingData.endDate}
+                  onChange={(e) => handleDateChange('endDate', e.target.value)}
+                  min={bookingData.startDate || new Date().toISOString().split('T')[0]}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="startTime">Pickup Time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={bookingData.startTime}
+                  onChange={(e) => handleDateChange('startTime', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endTime">Return Time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={bookingData.endTime}
+                  onChange={(e) => handleDateChange('endTime', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Pricing Summary */}
+            <Card className="bg-rental-trust-green/5 border-rental-trust-green/20">
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Duration:</span>
+                    <span>{bookingData.totalDays} day(s)</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Rate per day:</span>
+                    <span>₹{vehicle.price}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Security Deposit:</span>
+                    <span>₹{vehicle.price * 2}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between font-semibold">
+                    <span>Total Amount:</span>
+                    <span>₹{calculateTotalPrice()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-rental-navy-500">
+                    <span>Total + Deposit:</span>
+                    <span>₹{calculateTotalPrice() + (vehicle.price * 2)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowBookingForm(false)}
+                className="flex-1"
+              >
+                Back to Details
+              </Button>
+              <Button 
+                onClick={handleBookingSubmit}
+                className="flex-1 bg-rental-teal-500 hover:bg-rental-teal-600 text-white"
+              >
+                Confirm Booking
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -213,10 +391,10 @@ const VehicleDetailsModal = ({ vehicle, onClose, userRole }: VehicleDetailsModal
                   className="w-full bg-rental-teal-500 hover:bg-rental-teal-600 text-white py-3"
                 >
                   <Calendar className="w-4 h-4 mr-2" />
-                  Book Now
+                  Book This Vehicle
                 </Button>
                 <Button variant="outline" className="w-full">
-                  Schedule for Later
+                  Add to Favorites
                 </Button>
               </>
             ) : (

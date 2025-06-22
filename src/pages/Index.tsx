@@ -4,13 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Car, Bike } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AuthModal from "@/components/AuthModal";
-import MapInterface from "@/components/MapInterface";
 
 const Index = () => {
   const [selectedRole, setSelectedRole] = useState<'renter' | 'owner' | null>(null);
   const [showAuth, setShowAuth] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate();
 
   const handleRoleSelection = (role: 'renter' | 'owner') => {
     setSelectedRole(role);
@@ -18,13 +18,13 @@ const Index = () => {
   };
 
   const handleAuthSuccess = () => {
-    setIsAuthenticated(true);
     setShowAuth(false);
+    if (selectedRole === 'owner') {
+      navigate('/owner-dashboard');
+    } else {
+      navigate('/renter-dashboard');
+    }
   };
-
-  if (isAuthenticated) {
-    return <MapInterface userRole={selectedRole} />;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rental-navy-50 via-white to-rental-teal-50">
@@ -38,11 +38,11 @@ const Index = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-rental-navy-800">RidePoint</h1>
-                <p className="text-sm text-rental-navy-500">Location-First Vehicle Sharing</p>
+                <p className="text-sm text-rental-navy-500">AI-Powered Vehicle Sharing</p>
               </div>
             </div>
             <Badge variant="outline" className="bg-rental-trust-green/10 text-rental-trust-green border-rental-trust-green/20">
-              🔐 Secure & Verified
+              🤖 AI Enhanced
             </Badge>
           </div>
         </div>
@@ -53,12 +53,12 @@ const Index = () => {
         <div className="max-w-6xl mx-auto text-center">
           <div className="mb-8">
             <h2 className="text-5xl font-bold text-rental-navy-800 mb-4 leading-tight">
-              Smart Vehicle Sharing
+              Next-Gen Vehicle Sharing
               <br />
-              <span className="text-rental-teal-500">Made Simple</span>
+              <span className="text-rental-teal-500">Made Intelligent</span>
             </h2>
             <p className="text-xl text-rental-navy-600 max-w-2xl mx-auto">
-              Real-time GPS tracking, secure identity verification, and seamless booking experience
+              AI-powered recommendations, real-time GPS tracking, voice search, and secure identity verification
             </p>
           </div>
 
@@ -76,24 +76,28 @@ const Index = () => {
               </CardHeader>
               <CardContent className="text-center">
                 <p className="text-rental-navy-600 mb-6">
-                  Find and book bikes, cars, and scooters near you with real-time GPS tracking
+                  AI-powered vehicle discovery with voice search, live GPS tracking, and smart recommendations
                 </p>
-                <div className="flex justify-center space-x-4 mb-6">
-                  <div className="flex items-center space-x-2">
-                    <Bike className="w-5 h-5 text-rental-teal-500" />
-                    <span className="text-sm text-rental-navy-600">Bikes</span>
+                <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                  <div className="bg-rental-teal-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-teal-700">🎙️ Voice Search</div>
+                    <div className="text-rental-navy-600">Speak your needs</div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Car className="w-5 h-5 text-rental-teal-500" />
-                    <span className="text-sm text-rental-navy-600">Cars</span>
+                  <div className="bg-rental-teal-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-teal-700">🤖 AI Suggestions</div>
+                    <div className="text-rental-navy-600">Smart recommendations</div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Bike className="w-5 h-5 text-rental-teal-500" />
-                    <span className="text-sm text-rental-navy-600">Scooters</span>
+                  <div className="bg-rental-teal-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-teal-700">📍 Live Tracking</div>
+                    <div className="text-rental-navy-600">Real-time GPS</div>
+                  </div>
+                  <div className="bg-rental-teal-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-teal-700">💬 In-App Chat</div>
+                    <div className="text-rental-navy-600">Direct owner contact</div>
                   </div>
                 </div>
                 <Button className="w-full bg-rental-teal-500 hover:bg-rental-teal-600 text-white">
-                  Start Renting
+                  Start Renting with AI
                 </Button>
               </CardContent>
             </Card>
@@ -110,51 +114,55 @@ const Index = () => {
               </CardHeader>
               <CardContent className="text-center">
                 <p className="text-rental-navy-600 mb-6">
-                  List your vehicles and earn money with GPS tracking and verified renters
+                  AI-driven pricing, demand analytics, and automated booking management for maximum earnings
                 </p>
-                <div className="flex justify-center space-x-6 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-rental-lime-500">₹500+</div>
-                    <div className="text-xs text-rental-navy-500">Daily Earnings</div>
+                <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                  <div className="bg-rental-lime-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-lime-700">🧠 Smart Pricing</div>
+                    <div className="text-rental-navy-600">AI price optimization</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-rental-lime-500">24/7</div>
-                    <div className="text-xs text-rental-navy-500">GPS Tracking</div>
+                  <div className="bg-rental-lime-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-lime-700">📊 Analytics</div>
+                    <div className="text-rental-navy-600">Earnings insights</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-rental-lime-500">100%</div>
-                    <div className="text-xs text-rental-navy-500">Verified Users</div>
+                  <div className="bg-rental-lime-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-lime-700">🔒 Auto Accept</div>
+                    <div className="text-rental-navy-600">Verified renters only</div>
+                  </div>
+                  <div className="bg-rental-lime-50 p-3 rounded-lg">
+                    <div className="font-semibold text-rental-lime-700">🌡️ Demand Meter</div>
+                    <div className="text-rental-navy-600">Real-time insights</div>
                   </div>
                 </div>
                 <Button className="w-full bg-rental-lime-500 hover:bg-rental-lime-600 text-white">
-                  Start Earning
+                  Start Earning with AI
                 </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Trust Indicators */}
-          <div className="mt-16 grid grid-cols-3 gap-8 max-w-3xl mx-auto">
+          {/* AI Features Grid */}
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <div className="text-center">
-              <div className="w-12 h-12 bg-rental-trust-green/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                <div className="w-6 h-6 bg-rental-trust-green rounded-full"></div>
+              <div className="w-16 h-16 bg-rental-trust-green/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="text-2xl">🤖</div>
               </div>
-              <h3 className="font-semibold text-rental-navy-800 mb-2">Identity Verified</h3>
-              <p className="text-sm text-rental-navy-600">Aadhaar & license verification required</p>
+              <h3 className="font-semibold text-rental-navy-800 mb-2">AI Intelligence</h3>
+              <p className="text-sm text-rental-navy-600">Smart pricing, recommendations, and demand prediction powered by machine learning</p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-rental-trust-blue/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                <MapPin className="w-6 h-6 text-rental-trust-blue" />
+              <div className="w-16 h-16 bg-rental-trust-blue/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <MapPin className="w-8 h-8 text-rental-trust-blue" />
               </div>
-              <h3 className="font-semibold text-rental-navy-800 mb-2">Real-time Tracking</h3>
-              <p className="text-sm text-rental-navy-600">Live GPS location updates</p>
+              <h3 className="font-semibold text-rental-navy-800 mb-2">Live GPS Tracking</h3>
+              <p className="text-sm text-rental-navy-600">Real-time location updates, route optimization, and arrival predictions</p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-rental-trust-yellow/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                <div className="w-6 h-6 bg-rental-trust-yellow rounded-full"></div>
+              <div className="w-16 h-16 bg-rental-trust-yellow/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="text-2xl">🛡️</div>
               </div>
-              <h3 className="font-semibold text-rental-navy-800 mb-2">Secure Payments</h3>
-              <p className="text-sm text-rental-navy-600">Protected transactions & deposits</p>
+              <h3 className="font-semibold text-rental-navy-800 mb-2">Secure & Verified</h3>
+              <p className="text-sm text-rental-navy-600">Aadhaar verification, document validation, and community trust scores</p>
             </div>
           </div>
         </div>

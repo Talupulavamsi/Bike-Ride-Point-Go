@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,10 @@ import VehicleManagement from "@/components/VehicleManagement";
 import BookingManagement from "@/components/BookingManagement";
 import EarningsAnalytics from "@/components/EarningsAnalytics";
 import ProfileSettings from "@/components/ProfileSettings";
+import RevenueForecastingModule from "@/components/RevenueForecastingModule";
+import SeasonalDemandHeatmaps from "@/components/SeasonalDemandHeatmaps";
+import EnhancedFleetManagement from "@/components/EnhancedFleetManagement";
+import EnhancedAnalytics from "@/components/EnhancedAnalytics";
 
 const OwnerDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -115,9 +118,11 @@ const OwnerDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
+            <TabsTrigger value="forecasting">Forecasting</TabsTrigger>
+            <TabsTrigger value="heatmaps">Demand Maps</TabsTrigger>
+            <TabsTrigger value="vehicles">Fleet</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -210,8 +215,16 @@ const OwnerDashboard = () => {
             </Card>
           </TabsContent>
 
+          <TabsContent value="forecasting">
+            <RevenueForecastingModule />
+          </TabsContent>
+
+          <TabsContent value="heatmaps">
+            <SeasonalDemandHeatmaps />
+          </TabsContent>
+
           <TabsContent value="vehicles">
-            <VehicleManagement />
+            <EnhancedFleetManagement />
           </TabsContent>
 
           <TabsContent value="bookings">
@@ -219,7 +232,7 @@ const OwnerDashboard = () => {
           </TabsContent>
 
           <TabsContent value="analytics">
-            <EarningsAnalytics />
+            <EnhancedAnalytics />
           </TabsContent>
 
           <TabsContent value="profile">

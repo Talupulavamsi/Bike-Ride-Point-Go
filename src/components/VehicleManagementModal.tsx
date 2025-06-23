@@ -7,17 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Car, Bike } from "lucide-react";
+import { Plus, Trash2, Car, Bike, Scooter, CheckCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Vehicle {
-  id: string;
-  name: string;
-  type: string;
-  price: number;
-  location: string;
-  isAvailable: boolean;
-}
+import { useVehicleStore } from "@/hooks/useVehicleStore";
 
 interface VehicleManagementModalProps {
   trigger: React.ReactNode;
@@ -25,37 +17,19 @@ interface VehicleManagementModalProps {
 
 const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
   const { toast } = useToast();
+  const { vehicles, addVehicle, removeVehicle } = useVehicleStore();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"add" | "manage">("add");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Mock vehicles data - in real app this would come from a database
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    {
-      id: "1",
-      name: "Hero Splendor Plus",
-      type: "bike",
-      price: 150,
-      location: "MG Road, Bangalore",
-      isAvailable: true
-    },
-    {
-      id: "2",
-      name: "Maruti Swift",
-      type: "car",
-      price: 800,
-      location: "Brigade Road, Bangalore",
-      isAvailable: true
-    }
-  ]);
-
   const [newVehicle, setNewVehicle] = useState({
     name: "",
-    type: "",
+    type: "" as "bike" | "scooter" | "car" | "",
     price: "",
     location: ""
   });
 
-  const handleAddVehicle = () => {
+  const handleAddVehicle = async () => {
     if (!newVehicle.name || !newVehicle.type || !newVehicle.price || !newVehicle.location) {
       toast({
         title: "Error",
@@ -65,34 +39,63 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
       return;
     }
 
-    const vehicle: Vehicle = {
-      id: Date.now().toString(),
-      name: newVehicle.name,
-      type: newVehicle.type,
-      price: parseInt(newVehicle.price),
-      location: newVehicle.location,
-      isAvailable: true
-    };
+    setIsSubmitting(true);
 
-    setVehicles([...vehicles, vehicle]);
-    setNewVehicle({ name: "", type: "", price: "", location: "" });
-    
-    toast({
-      title: "Success",
-      description: "Vehicle added successfully!"
-    });
+    try {
+      const vehicle = addVehicle({
+        name: newVehicle.name,
+        type: newVehicle.type as "bike" | "scooter" | "car",
+        price: parseInt(newVehicle.price),
+        location: newVehicle.location,
+        isAvailable: true
+      });
+
+      setNewVehicle({ name: "", type: "", price: "", location: "" });
+      
+      toast({
+        title: "Success! 🚗",
+        description: `${vehicle.name} has been added to your fleet successfully!`
+      });
+
+      // Show success animation
+      setTimeout(() => {
+        setActiveTab("manage");
+      }, 1000);
+
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add vehicle. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRemoveVehicle = (vehicleId: string) => {
-    setVehicles(vehicles.filter(v => v.id !== vehicleId));
+  const handleRemoveVehicle = (vehicleId: string, vehicleName: string) => {
+    removeVehicle(vehicleId);
     toast({
-      title: "Success",
-      description: "Vehicle removed successfully!"
+      title: "Vehicle Removed",
+      description: `${vehicleName} has been removed from your fleet`
     });
   };
 
   const getVehicleIcon = (type: string) => {
-    return type === 'car' ? <Car className="w-4 h-4" /> : <Bike className="w-4 h-4" />;
+    switch (type) {
+      case 'car': return <Car className="w-4 h-4" />;
+      case 'scooter': return <Scooter className="w-4 h-4" />;
+      default: return <Bike className="w-4 h-4" />;
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'bike': return 'bg-rental-teal-500';
+      case 'car': return 'bg-rental-lime-500';
+      case 'scooter': return 'bg-rental-trust-blue';
+      default: return 'bg-rental-teal-500';
+    }
   };
 
   return (
@@ -119,7 +122,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
               variant={activeTab === "manage" ? "default" : "outline"}
               onClick={() => setActiveTab("manage")}
             >
-              Manage Fleet
+              Manage Fleet ({vehicles.length})
             </Button>
           </div>
 
@@ -128,17 +131,21 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="vehicleName">Vehicle Name</Label>
+                  <Label htmlFor="vehicleName">Vehicle Name *</Label>
                   <Input
                     id="vehicleName"
                     value={newVehicle.name}
                     onChange={(e) => setNewVehicle({...newVehicle, name: e.target.value})}
-                    placeholder="e.g. Honda Activa"
+                    placeholder="e.g. Honda Activa 6G"
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="vehicleType">Vehicle Type</Label>
-                  <Select onValueChange={(value) => setNewVehicle({...newVehicle, type: value})}>
+                  <Label htmlFor="vehicleType">Vehicle Type *</Label>
+                  <Select 
+                    onValueChange={(value) => setNewVehicle({...newVehicle, type: value as "bike" | "scooter" | "car"})}
+                    disabled={isSubmitting}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -150,28 +157,44 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="vehiclePrice">Price per Day (₹)</Label>
+                  <Label htmlFor="vehiclePrice">Price per Day (₹) *</Label>
                   <Input
                     id="vehiclePrice"
                     type="number"
                     value={newVehicle.price}
                     onChange={(e) => setNewVehicle({...newVehicle, price: e.target.value})}
                     placeholder="150"
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="vehicleLocation">Location</Label>
+                  <Label htmlFor="vehicleLocation">Location *</Label>
                   <Input
                     id="vehicleLocation"
                     value={newVehicle.location}
                     onChange={(e) => setNewVehicle({...newVehicle, location: e.target.value})}
                     placeholder="e.g. MG Road, Bangalore"
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
-              <Button onClick={handleAddVehicle} className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Vehicle
+              
+              <Button 
+                onClick={handleAddVehicle} 
+                className="w-full bg-rental-teal-500 hover:bg-rental-teal-600"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Adding Vehicle...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Vehicle to Fleet
+                  </>
+                )}
               </Button>
             </div>
           )}
@@ -179,37 +202,74 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
           {/* Manage Fleet Tab */}
           {activeTab === "manage" && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-600">Total Vehicles: {vehicles.length}</p>
-              <div className="grid gap-4">
-                {vehicles.map((vehicle) => (
-                  <Card key={vehicle.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          {getVehicleIcon(vehicle.type)}
-                          <div>
-                            <h4 className="font-semibold">{vehicle.name}</h4>
-                            <p className="text-sm text-gray-600">{vehicle.location}</p>
+              {vehicles.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <Car className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                    <h3 className="text-lg font-semibold mb-2">You have 0 vehicles</h3>
+                    <p className="text-gray-600 mb-4">
+                      Start by adding your first vehicle to begin earning
+                    </p>
+                    <Button 
+                      onClick={() => setActiveTab("add")}
+                      className="bg-rental-teal-500 hover:bg-rental-teal-600"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Vehicle
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Total Vehicles: {vehicles.length}</p>
+                    <Badge className="bg-rental-trust-green text-white">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      All Synced
+                    </Badge>
+                  </div>
+                  <div className="grid gap-4">
+                    {vehicles.map((vehicle) => (
+                      <Card key={vehicle.id} className="border-l-4 border-l-rental-teal-500">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-10 h-10 rounded-lg ${getTypeColor(vehicle.type)} flex items-center justify-center text-white`}>
+                                {getVehicleIcon(vehicle.type)}
+                              </div>
+                              <div>
+                                <h4 className="font-semibold">{vehicle.name}</h4>
+                                <p className="text-sm text-gray-600">{vehicle.location}</p>
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <Badge variant={vehicle.isAvailable ? "default" : "secondary"}>
+                                    {vehicle.isAvailable ? "Available" : "Booked"}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    GPS: {vehicle.gpsStatus}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <div className="text-right">
+                                <p className="font-semibold">₹{vehicle.price}/day</p>
+                                <p className="text-sm text-gray-500">{vehicle.totalBookings} bookings</p>
+                              </div>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRemoveVehicle(vehicle.id, vehicle.name)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge variant={vehicle.isAvailable ? "default" : "secondary"}>
-                            {vehicle.isAvailable ? "Available" : "Booked"}
-                          </Badge>
-                          <span className="font-semibold">₹{vehicle.price}/day</span>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleRemoveVehicle(vehicle.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

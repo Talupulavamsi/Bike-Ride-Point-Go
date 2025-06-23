@@ -16,30 +16,36 @@ import {
   Shield,
   Bell,
   CreditCard,
-  Settings
+  Settings,
+  Lock
 } from "lucide-react";
 import VehicleOwnerProfile from "./VehicleOwnerProfile";
+import { useVehicleStore } from "@/hooks/useVehicleStore";
 
 interface ProfileSettingsProps {
   userRole: 'renter' | 'owner' | null;
 }
 
 const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
+  const { owner, stats } = useVehicleStore();
+  
   const [profileData, setProfileData] = useState({
-    name: userRole === 'owner' ? 'Rajesh Kumar' : 'Priya Singh',
-    email: userRole === 'owner' ? 'rajesh.kumar@email.com' : 'priya.singh@email.com',
-    phone: userRole === 'owner' ? '+91 98765 43210' : '+91 87654 32109',
-    location: 'Bangalore, Karnataka',
-    joinDate: 'January 2024',
-    verified: true
+    name: owner?.name || 'Rajesh Kumar',
+    email: owner?.email || 'rajesh.kumar@email.com',
+    phone: owner?.phone || '+91 98765 43210',
+    location: owner?.location || 'Bangalore, Karnataka',
+    joinDate: owner?.joinDate || 'January 2024',
+    verified: owner?.verified || true,
+    aadhaar: owner?.aadhaar || '****-****-1234',
+    license: owner?.license || 'KA02-****-5678'
   });
 
   const userStats = userRole === 'owner' 
     ? {
-        totalVehicles: 3,
-        totalEarnings: '₹45,000',
-        totalRides: 127,
-        rating: 4.8
+        totalVehicles: stats.totalVehicles,
+        totalEarnings: `₹${stats.totalEarnings.toLocaleString()}`,
+        totalRides: stats.totalBookings,
+        rating: stats.averageRating
       }
     : {
         totalRides: 24,
@@ -80,7 +86,7 @@ const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
                   <>
                     <div className="text-center">
                       <p className="text-2xl font-bold text-rental-navy-800">{userStats.totalVehicles}</p>
-                      <p className="text-sm text-rental-navy-600">Vehicles</p>
+                      <p className="text-sm text-rental-navy-600">Vehicles Listed</p>
                     </div>
                     <div className="text-center">
                       <p className="text-2xl font-bold text-rental-trust-green">{userStats.totalEarnings}</p>
@@ -147,20 +153,28 @@ const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
                 </div>
                 <div>
                   <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={profileData.email}
-                    onChange={(e) => setProfileData({...profileData, email: e.target.value})}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="email"
+                      type="email"
+                      value={profileData.email}
+                      readOnly
+                      className="bg-gray-50"
+                    />
+                    <Lock className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={profileData.phone}
-                    onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="phone"
+                      value={profileData.phone}
+                      readOnly
+                      className="bg-gray-50"
+                    />
+                    <Lock className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="location">Location</Label>
@@ -170,6 +184,34 @@ const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
                     onChange={(e) => setProfileData({...profileData, location: e.target.value})}
                   />
                 </div>
+                {userRole === 'owner' && (
+                  <>
+                    <div>
+                      <Label htmlFor="aadhaar">Aadhaar Number</Label>
+                      <div className="relative">
+                        <Input
+                          id="aadhaar"
+                          value={profileData.aadhaar}
+                          readOnly
+                          className="bg-gray-50"
+                        />
+                        <Lock className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="license">Driving License</Label>
+                      <div className="relative">
+                        <Input
+                          id="license"
+                          value={profileData.license}
+                          readOnly
+                          className="bg-gray-50"
+                        />
+                        <Lock className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <Button className="bg-rental-teal-500 hover:bg-rental-teal-600">
                 Update Profile
@@ -205,6 +247,20 @@ const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
                     Verified
                   </Badge>
                 </div>
+                {userRole === 'owner' && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Car className="w-5 h-5 text-rental-teal-600" />
+                      <div>
+                        <p className="font-medium">Total Vehicles Listed</p>
+                        <p className="text-sm text-rental-teal-600">{stats.totalVehicles} vehicles in your fleet</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline">
+                      {stats.totalVehicles}
+                    </Badge>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

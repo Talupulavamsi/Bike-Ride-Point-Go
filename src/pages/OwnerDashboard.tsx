@@ -28,6 +28,7 @@ import RevenueForecastingModule from "@/components/RevenueForecastingModule";
 import SeasonalDemandHeatmaps from "@/components/SeasonalDemandHeatmaps";
 import EnhancedFleetManagement from "@/components/EnhancedFleetManagement";
 import EnhancedAnalytics from "@/components/EnhancedAnalytics";
+import VehicleManagementModal from "@/components/VehicleManagementModal";
 
 const OwnerDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -107,6 +108,19 @@ const OwnerDashboard = () => {
     }
   };
 
+  const handleQuickAction = (action: string) => {
+    switch (action) {
+      case "bookings":
+        setActiveTab("bookings");
+        break;
+      case "analytics":
+        setActiveTab("analytics");
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardHeader userRole="owner" />
@@ -161,15 +175,27 @@ const OwnerDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Button className="h-20 flex flex-col items-center justify-center space-y-2 bg-rental-teal-500 hover:bg-rental-teal-600">
-                    <Plus className="w-6 h-6" />
-                    <span>Add Vehicle</span>
-                  </Button>
-                  <Button variant="outline" className="h-20 flex flex-col items-center justify-center space-y-2">
+                  <VehicleManagementModal
+                    trigger={
+                      <Button className="h-20 flex flex-col items-center justify-center space-y-2 bg-rental-teal-500 hover:bg-rental-teal-600 w-full">
+                        <Plus className="w-6 h-6" />
+                        <span>Add Vehicle</span>
+                      </Button>
+                    }
+                  />
+                  <Button 
+                    variant="outline" 
+                    className="h-20 flex flex-col items-center justify-center space-y-2"
+                    onClick={() => handleQuickAction("bookings")}
+                  >
                     <Eye className="w-6 h-6" />
                     <span>View Bookings</span>
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col items-center justify-center space-y-2">
+                  <Button 
+                    variant="outline" 
+                    className="h-20 flex flex-col items-center justify-center space-y-2"
+                    onClick={() => handleQuickAction("analytics")}
+                  >
                     <BarChart3 className="w-6 h-6" />
                     <span>View Analytics</span>
                   </Button>

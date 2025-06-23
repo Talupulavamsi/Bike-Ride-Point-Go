@@ -25,7 +25,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Wrench,
-  Zap
+  Zap,
+  TrendingUp
 } from "lucide-react";
 
 const EnhancedFleetManagement = () => {

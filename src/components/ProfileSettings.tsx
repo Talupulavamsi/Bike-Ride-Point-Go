@@ -1,167 +1,279 @@
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { User, Shield, FileText, Camera, Edit } from "lucide-react";
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Car, 
+  Shield,
+  Bell,
+  CreditCard,
+  Settings
+} from "lucide-react";
+import VehicleOwnerProfile from "./VehicleOwnerProfile";
 
 interface ProfileSettingsProps {
-  userRole: 'owner' | 'renter';
+  userRole: 'renter' | 'owner' | null;
 }
 
 const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
-  const userInfo = {
-    name: userRole === 'owner' ? 'Rajesh Kumar' : 'Amit Patel',
-    email: userRole === 'owner' ? 'rajesh@example.com' : 'amit@example.com',
-    phone: '+91 9876543210',
-    rating: userRole === 'owner' ? 4.8 : 4.9,
-    joinDate: 'March 2023',
-    verificationStatus: 'verified'
-  };
+  const [profileData, setProfileData] = useState({
+    name: userRole === 'owner' ? 'Rajesh Kumar' : 'Priya Singh',
+    email: userRole === 'owner' ? 'rajesh.kumar@email.com' : 'priya.singh@email.com',
+    phone: userRole === 'owner' ? '+91 98765 43210' : '+91 87654 32109',
+    location: 'Bangalore, Karnataka',
+    joinDate: 'January 2024',
+    verified: true
+  });
 
-  const documents = [
-    {
-      type: 'Aadhaar Card',
-      status: 'verified',
-      uploadDate: '15 Mar 2023'
-    },
-    {
-      type: 'Driving License',
-      status: 'verified', 
-      uploadDate: '15 Mar 2023'
-    },
-    {
-      type: 'Address Proof',
-      status: 'verified',
-      uploadDate: '15 Mar 2023'
-    }
-  ];
+  const userStats = userRole === 'owner' 
+    ? {
+        totalVehicles: 3,
+        totalEarnings: '₹45,000',
+        totalRides: 127,
+        rating: 4.8
+      }
+    : {
+        totalRides: 24,
+        totalSpent: '₹3,200',
+        savedMoney: '₹8,500',
+        rating: 4.9
+      };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-rental-navy-800">Profile Settings</h2>
-        <p className="text-rental-navy-600">Manage your account and verification documents</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Profile Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <User className="w-5 h-5" />
-              <span>Personal Information</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-rental-navy-100 rounded-full flex items-center justify-center">
-                <User className="w-8 h-8 text-rental-navy-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-rental-navy-800">{userInfo.name}</h3>
-                <p className="text-sm text-rental-navy-500">{userRole === 'owner' ? 'Vehicle Owner' : 'Verified Renter'}</p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <Badge variant="outline" className="bg-rental-trust-green/10 text-rental-trust-green">
-                    ⭐ {userInfo.rating} Rating
-                  </Badge>
-                  <Badge variant="outline">
-                    Joined {userInfo.joinDate}
-                  </Badge>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                <Camera className="w-4 h-4 mr-1" />
-                Change Photo
-              </Button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-rental-navy-600">Full Name</label>
-                <Input value={userInfo.name} className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm text-rental-navy-600">Email</label>
-                <Input value={userInfo.email} className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm text-rental-navy-600">Phone Number</label>
-                <Input value={userInfo.phone} className="mt-1" />
-              </div>
-            </div>
-
-            <Button className="w-full bg-rental-teal-500 hover:bg-rental-teal-600">
-              <Edit className="w-4 h-4 mr-2" />
-              Update Profile
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Document Verification */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Shield className="w-5 h-5" />
-              <span>Document Verification</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-rental-trust-green/10 p-4 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-rental-trust-green rounded-full"></div>
-                <span className="text-sm font-semibold text-rental-trust-green">Fully Verified Account</span>
-              </div>
-              <p className="text-xs text-rental-navy-600 mt-1">All documents verified successfully</p>
-            </div>
-
-            <div className="space-y-3">
-              {documents.map((doc, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <FileText className="w-4 h-4 text-rental-navy-400" />
-                    <div>
-                      <p className="text-sm font-medium text-rental-navy-800">{doc.type}</p>
-                      <p className="text-xs text-rental-navy-500">Uploaded {doc.uploadDate}</p>
-                    </div>
-                  </div>
+      {/* Profile Header */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-start space-x-6">
+            <Avatar className="w-20 h-20">
+              <AvatarImage src="/placeholder.svg" />
+              <AvatarFallback className="text-xl">
+                {profileData.name.split(' ').map(n => n[0]).join('')}
+              </AvatarFallback>
+            </Avatar>
+            
+            <div className="flex-1">
+              <div className="flex items-center space-x-3 mb-2">
+                <h2 className="text-2xl font-bold">{profileData.name}</h2>
+                {profileData.verified && (
                   <Badge className="bg-rental-trust-green text-white">
+                    <Shield className="w-3 h-3 mr-1" />
                     Verified
                   </Badge>
-                </div>
-              ))}
+                )}
+                <Badge variant="outline" className="capitalize">
+                  {userRole}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                {userRole === 'owner' ? (
+                  <>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-navy-800">{userStats.totalVehicles}</p>
+                      <p className="text-sm text-rental-navy-600">Vehicles</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-trust-green">{userStats.totalEarnings}</p>
+                      <p className="text-sm text-rental-navy-600">Total Earnings</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-teal-600">{userStats.totalRides}</p>
+                      <p className="text-sm text-rental-navy-600">Total Bookings</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-trust-yellow">{userStats.rating}</p>
+                      <p className="text-sm text-rental-navy-600">Rating</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-teal-600">{userStats.totalRides}</p>
+                      <p className="text-sm text-rental-navy-600">Total Rides</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-trust-green">{userStats.totalSpent}</p>
+                      <p className="text-sm text-rental-navy-600">Total Spent</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-lime-600">{userStats.savedMoney}</p>
+                      <p className="text-sm text-rental-navy-600">Money Saved</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-rental-trust-yellow">{userStats.rating}</p>
+                      <p className="text-sm text-rental-navy-600">Your Rating</p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-
-            <Button variant="outline" className="w-full">
-              <FileText className="w-4 h-4 mr-2" />
-              Upload Additional Documents
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Additional Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Account Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button variant="outline">
-              Change Password
-            </Button>
-            <Button variant="outline">
-              Privacy Settings
-            </Button>
-            <Button variant="outline">
-              Notification Preferences
-            </Button>
-            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-              Delete Account
-            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Profile Tabs */}
+      <Tabs defaultValue="personal" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="personal">Personal Info</TabsTrigger>
+          {userRole === 'owner' && <TabsTrigger value="vehicles">My Fleet</TabsTrigger>}
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="personal" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    value={profileData.name}
+                    onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={profileData.email}
+                    onChange={(e) => setProfileData({...profileData, email: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    value={profileData.phone}
+                    onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    value={profileData.location}
+                    onChange={(e) => setProfileData({...profileData, location: e.target.value})}
+                  />
+                </div>
+              </div>
+              <Button className="bg-rental-teal-500 hover:bg-rental-teal-600">
+                Update Profile
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <User className="w-5 h-5 text-rental-navy-500" />
+                    <div>
+                      <p className="font-medium">Member since</p>
+                      <p className="text-sm text-rental-navy-600">{profileData.joinDate}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Shield className="w-5 h-5 text-rental-trust-green" />
+                    <div>
+                      <p className="font-medium">Verification Status</p>
+                      <p className="text-sm text-rental-trust-green">Verified Account</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-rental-trust-green">
+                    <Shield className="w-3 h-3 mr-1" />
+                    Verified
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {userRole === 'owner' && (
+          <TabsContent value="vehicles">
+            <VehicleOwnerProfile />
+          </TabsContent>
+        )}
+
+        <TabsContent value="notifications" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Notification Preferences</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Booking Updates</p>
+                    <p className="text-sm text-rental-navy-600">Get notified about booking confirmations and updates</p>
+                  </div>
+                  <input type="checkbox" defaultChecked className="rounded" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Payment Notifications</p>
+                    <p className="text-sm text-rental-navy-600">Receive payment confirmations and receipts</p>
+                  </div>
+                  <input type="checkbox" defaultChecked className="rounded" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Promotional Offers</p>
+                    <p className="text-sm text-rental-navy-600">Get updates about discounts and special offers</p>
+                  </div>
+                  <input type="checkbox" className="rounded" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button variant="outline" className="w-full justify-start">
+                <CreditCard className="w-4 h-4 mr-2" />
+                Payment Methods
+              </Button>
+              <Button variant="outline" className="w-full justify-start">
+                <Shield className="w-4 h-4 mr-2" />
+                Privacy & Security
+              </Button>
+              <Button variant="outline" className="w-full justify-start">
+                <Settings className="w-4 h-4 mr-2" />
+                App Preferences
+              </Button>
+              <Button variant="outline" className="w-full justify-start text-red-600 hover:text-red-700">
+                Delete Account
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

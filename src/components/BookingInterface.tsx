@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Car, Bike, MapPin, Star, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Car, Bike, MapPin, Star, Calendar as CalendarIcon, Clock, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -41,6 +41,8 @@ const BookingInterface = () => {
   const [selectedDuration, setSelectedDuration] = useState<string>("");
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [activeTab, setActiveTab] = useState<"browse" | "bookings">("browse");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [visibleVehicles, setVisibleVehicles] = useState(10);
   
   const [bookings, setBookings] = useState<Booking[]>([
     {
@@ -55,7 +57,8 @@ const BookingInterface = () => {
     }
   ]);
 
-  const availableVehicles: Vehicle[] = [
+  // Expanded vehicle list with 30 different vehicles
+  const allVehicles: Vehicle[] = [
     {
       id: "1",
       name: "Hero Splendor Plus",
@@ -94,8 +97,370 @@ const BookingInterface = () => {
       owner: "Amit Sharma",
       features: ["Electric", "GPS", "Fast Charging"],
       image: "/placeholder.svg"
+    },
+    {
+      id: "4",
+      name: "Honda Activa 6G",
+      type: "scooter",
+      price: 180,
+      location: "Koramangala, Bangalore",
+      rating: 4.7,
+      distance: 1.2,
+      isAvailable: true,
+      owner: "Sneha Patel",
+      features: ["Helmet Included", "Storage Box", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "5",
+      name: "Royal Enfield Classic 350",
+      type: "bike",
+      price: 400,
+      location: "Indiranagar, Bangalore",
+      rating: 4.5,
+      distance: 2.1,
+      isAvailable: true,
+      owner: "Vikram Singh",
+      features: ["Bluetooth", "GPS", "Tank Full"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "6",
+      name: "Hyundai i20",
+      type: "car",
+      price: 1200,
+      location: "Whitefield, Bangalore",
+      rating: 4.8,
+      distance: 3.5,
+      isAvailable: false,
+      owner: "Meera Reddy",
+      features: ["AC", "Music System", "GPS", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "7",
+      name: "TVS Jupiter",
+      type: "scooter",
+      price: 160,
+      location: "JP Nagar, Bangalore",
+      rating: 4.4,
+      distance: 1.8,
+      isAvailable: true,
+      owner: "Suresh Kumar",
+      features: ["Storage", "LED Lights", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "8",
+      name: "Bajaj Pulsar 150",
+      type: "bike",
+      price: 200,
+      location: "HSR Layout, Bangalore",
+      rating: 4.6,
+      distance: 2.3,
+      isAvailable: true,
+      owner: "Ravi Gupta",
+      features: ["Sports Bike", "GPS", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "9",
+      name: "Maruti Alto",
+      type: "car",
+      price: 600,
+      location: "Electronic City, Bangalore",
+      rating: 4.3,
+      distance: 4.2,
+      isAvailable: true,
+      owner: "Anita Sharma",
+      features: ["AC", "Music", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "10",
+      name: "Honda CB Shine",
+      type: "bike",
+      price: 170,
+      location: "Malleshwaram, Bangalore",
+      rating: 4.7,
+      distance: 1.5,
+      isAvailable: true,
+      owner: "Kiran Kumar",
+      features: ["Helmet", "GPS", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "11",
+      name: "Suzuki Access 125",
+      type: "scooter",
+      price: 190,
+      location: "Jayanagar, Bangalore",
+      rating: 4.8,
+      distance: 1.1,
+      isAvailable: true,
+      owner: "Pooja Agarwal",
+      features: ["Storage", "Bluetooth", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "12",
+      name: "Tata Nexon",
+      type: "car",
+      price: 1500,
+      location: "Banashankari, Bangalore",
+      rating: 4.9,
+      distance: 2.8,
+      isAvailable: true,
+      owner: "Deepak Verma",
+      features: ["SUV", "AC", "GPS", "Bluetooth"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "13",
+      name: "Yamaha FZ-S",
+      type: "bike",
+      price: 250,
+      location: "RT Nagar, Bangalore",
+      rating: 4.5,
+      distance: 3.1,
+      isAvailable: true,
+      owner: "Arjun Nair",
+      features: ["Sports", "GPS", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "14",
+      name: "Ola S1 Pro",
+      type: "scooter",
+      price: 220,
+      location: "Sarjapur Road, Bangalore",
+      rating: 4.6,
+      distance: 3.8,
+      isAvailable: true,
+      owner: "Kavya Menon",
+      features: ["Electric", "App Control", "Fast Charge"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "15",
+      name: "Maruti Baleno",
+      type: "car",
+      price: 900,
+      location: "Yeshwanthpur, Bangalore",
+      rating: 4.7,
+      distance: 2.5,
+      isAvailable: true,
+      owner: "Rohit Jain",
+      features: ["Hatchback", "AC", "Music", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "16",
+      name: "KTM Duke 200",
+      type: "bike",
+      price: 350,
+      location: "Marathahalli, Bangalore",
+      rating: 4.8,
+      distance: 4.1,
+      isAvailable: true,
+      owner: "Aditya Kumar",
+      features: ["Performance", "ABS", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "17",
+      name: "Honda Dio",
+      type: "scooter",
+      price: 150,
+      location: "Basavanagudi, Bangalore",
+      rating: 4.4,
+      distance: 1.7,
+      isAvailable: true,
+      owner: "Priya Nair",
+      features: ["Compact", "Storage", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "18",
+      name: "Ford EcoSport",
+      type: "car",
+      price: 1300,
+      location: "Hebbal, Bangalore",
+      rating: 4.6,
+      distance: 3.2,
+      isAvailable: false,
+      owner: "Sanjay Reddy",
+      features: ["SUV", "AC", "GPS", "Bluetooth"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "19",
+      name: "Bajaj Avenger",
+      type: "bike",
+      price: 280,
+      location: "Shivajinagar, Bangalore",
+      rating: 4.3,
+      distance: 2.7,
+      isAvailable: true,
+      owner: "Manoj Singh",
+      features: ["Cruiser", "Comfortable", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "20",
+      name: "Simple One",
+      type: "scooter",
+      price: 240,
+      location: "Bellandur, Bangalore",
+      rating: 4.7,
+      distance: 4.5,
+      isAvailable: true,
+      owner: "Neha Gupta",
+      features: ["Electric", "App Control", "Fast Charge"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "21",
+      name: "Honda City",
+      type: "car",
+      price: 1100,
+      location: "Rajajinagar, Bangalore",
+      rating: 4.8,
+      distance: 2.2,
+      isAvailable: true,
+      owner: "Ashwin Kumar",
+      features: ["Sedan", "AC", "Sunroof", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "22",
+      name: "Hero Xtreme 200R",
+      type: "bike",
+      price: 220,
+      location: "Yelahanka, Bangalore",
+      rating: 4.5,
+      distance: 5.1,
+      isAvailable: true,
+      owner: "Rajesh Yadav",
+      features: ["Sports", "LED", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "23",
+      name: "TVS NTorq 125",
+      type: "scooter",
+      price: 200,
+      location: "BTM Layout, Bangalore",
+      rating: 4.6,
+      distance: 2.4,
+      isAvailable: true,
+      owner: "Priyanka Shah",
+      features: ["Smart Connect", "Storage", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "24",
+      name: "Mahindra XUV300",
+      type: "car",
+      price: 1600,
+      location: "Vijayanagar, Bangalore",
+      rating: 4.7,
+      distance: 3.6,
+      isAvailable: true,
+      owner: "Venkat Reddy",
+      features: ["SUV", "Safety", "AC", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "25",
+      name: "Suzuki Gixxer",
+      type: "bike",
+      price: 240,
+      location: "Kammanahalli, Bangalore",
+      rating: 4.4,
+      distance: 2.9,
+      isAvailable: true,
+      owner: "Akash Sharma",
+      features: ["Performance", "ABS", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "26",
+      name: "Hero Maestro Edge",
+      type: "scooter",
+      price: 175,
+      location: "Frazer Town, Bangalore",
+      rating: 4.3,
+      distance: 1.9,
+      isAvailable: true,
+      owner: "Lakshmi Devi",
+      features: ["Large Storage", "LED", "Full Tank"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "27",
+      name: "Volkswagen Polo",
+      type: "car",
+      price: 1000,
+      location: "Sadashivanagar, Bangalore",
+      rating: 4.6,
+      distance: 2.1,
+      isAvailable: true,
+      owner: "Arshad Khan",
+      features: ["Premium", "AC", "Music", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "28",
+      name: "Yamaha R15 V4",
+      type: "bike",
+      price: 380,
+      location: "Nagarbhavi, Bangalore",
+      rating: 4.9,
+      distance: 4.3,
+      isAvailable: true,
+      owner: "Suraj Patel",
+      features: ["Super Sport", "ABS", "GPS"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "29",
+      name: "Bajaj Chetak",
+      type: "scooter",
+      price: 210,
+      location: "Kengeri, Bangalore",
+      rating: 4.5,
+      distance: 5.2,
+      isAvailable: true,
+      owner: "Madhuri Iyer",
+      features: ["Electric", "Retro Design", "Smart Features"],
+      image: "/placeholder.svg"
+    },
+    {
+      id: "30",
+      name: "Skoda Rapid",
+      type: "car",
+      price: 1250,
+      location: "Magadi Road, Bangalore",
+      rating: 4.7,
+      distance: 4.8,
+      isAvailable: true,
+      owner: "Prasad Reddy",
+      features: ["Sedan", "Premium", "AC", "GPS"],
+      image: "/placeholder.svg"
     }
   ];
+
+  // Filter vehicles based on search query
+  const filteredVehicles = allVehicles.filter(vehicle => 
+    vehicle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    vehicle.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    vehicle.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    vehicle.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    vehicle.features.some(feature => feature.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const availableVehicles = filteredVehicles.slice(0, visibleVehicles);
 
   const getVehicleIcon = (type: "bike" | "car" | "scooter") => {
     return type === "car" ? <Car className="w-5 h-5" /> : <Bike className="w-5 h-5" />;
@@ -153,6 +518,14 @@ const BookingInterface = () => {
     }
   };
 
+  const handleShowMore = () => {
+    setVisibleVehicles(prev => Math.min(prev + 10, filteredVehicles.length));
+  };
+
+  const handleShowAll = () => {
+    setVisibleVehicles(filteredVehicles.length);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -183,14 +556,32 @@ const BookingInterface = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Vehicle List */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Available Vehicles</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Available Vehicles</h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search vehicles, types, locations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
+            </div>
+            
+            {searchQuery && (
+              <p className="text-sm text-gray-600">
+                Found {filteredVehicles.length} vehicles matching "{searchQuery}"
+              </p>
+            )}
+
             {availableVehicles.map((vehicle) => (
               <Card 
                 key={vehicle.id} 
                 className={`cursor-pointer transition-all ${
                   selectedVehicle?.id === vehicle.id ? 'border-rental-teal-500 bg-rental-teal-50' : ''
-                }`}
-                onClick={() => setSelectedVehicle(vehicle)}
+                } ${!vehicle.isAvailable ? 'opacity-60' : ''}`}
+                onClick={() => vehicle.isAvailable && setSelectedVehicle(vehicle)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -202,7 +593,7 @@ const BookingInterface = () => {
                         <h4 className="font-semibold">{vehicle.name}</h4>
                         <div className="flex items-center space-x-2 text-sm text-gray-600">
                           <MapPin className="w-3 h-3" />
-                          <span>{vehicle.distance}km away</span>
+                          <span>{vehicle.distance}km away • {vehicle.owner}</span>
                           <Star className="w-3 h-3 text-yellow-500 fill-current" />
                           <span>{vehicle.rating}</span>
                         </div>
@@ -211,6 +602,9 @@ const BookingInterface = () => {
                     <div className="text-right">
                       <p className="font-bold text-lg">₹{vehicle.price}</p>
                       <p className="text-sm text-gray-600">per day</p>
+                      {!vehicle.isAvailable && (
+                        <Badge variant="secondary" className="mt-1">Booked</Badge>
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1">
@@ -223,6 +617,28 @@ const BookingInterface = () => {
                 </CardContent>
               </Card>
             ))}
+
+            {/* Show More / Show All buttons */}
+            {filteredVehicles.length > visibleVehicles && (
+              <div className="flex space-x-2 justify-center">
+                <Button variant="outline" onClick={handleShowMore}>
+                  Show More ({Math.min(10, filteredVehicles.length - visibleVehicles)} more)
+                </Button>
+                <Button variant="outline" onClick={handleShowAll}>
+                  Show All ({filteredVehicles.length - visibleVehicles} remaining)
+                </Button>
+              </div>
+            )}
+
+            {filteredVehicles.length === 0 && searchQuery && (
+              <Card>
+                <CardContent className="p-8 text-center text-gray-500">
+                  <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No vehicles found matching "{searchQuery}"</p>
+                  <p className="text-sm">Try searching with different keywords</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Booking Form */}

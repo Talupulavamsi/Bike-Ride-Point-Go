@@ -34,43 +34,31 @@ import { useVehicleStore } from "@/hooks/useVehicleStore";
 
 const OwnerDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  const { stats, bookings, addBooking } = useVehicleStore();
+  const { stats, bookings, vehicles, addBooking } = useVehicleStore();
 
-  // Simulate some demo bookings for demonstration
+  // Add demo bookings only if there are vehicles but no bookings
   useEffect(() => {
-    if (bookings.length === 0 && stats.totalVehicles > 0) {
-      // Add demo bookings only if there are vehicles but no bookings
+    if (bookings.length === 0 && vehicles.length > 0) {
       const demoBookings = [
         {
           renterId: "renter-1",
           renterName: "Amit Kumar",
-          vehicleId: "1",
-          vehicleName: "Hero Splendor Plus",
+          vehicleId: vehicles[0].id,
+          vehicleName: vehicles[0].name,
           pickupTime: "Today, 9:30 AM",
           duration: "2 hours",
           amount: "₹300",
           status: "active" as const,
           startTime: "09:30 AM"
-        },
-        {
-          renterId: "renter-2",
-          renterName: "Priya Singh",
-          vehicleId: "2",
-          vehicleName: "Maruti Swift",
-          pickupTime: "Today, 2:00 PM",
-          duration: "1 day",
-          amount: "₹800",
-          status: "upcoming" as const,
-          startTime: "02:00 PM"
         }
       ];
 
-      // Add demo bookings after a short delay
+      // Add demo booking after a short delay
       setTimeout(() => {
         demoBookings.forEach(booking => addBooking(booking));
       }, 1000);
     }
-  }, [stats.totalVehicles, bookings.length, addBooking]);
+  }, [vehicles.length, bookings.length, addBooking, vehicles]);
 
   const dashboardStats = [
     {
@@ -217,7 +205,7 @@ const OwnerDashboard = () => {
             {/* Recent Bookings */}
             <Card>
               <CardHeader>
-                <CardTitle>Recent Bookings</CardTitle>
+                <CardTitle>Under Booking</CardTitle>
               </CardHeader>
               <CardContent>
                 {recentBookings.length === 0 ? (
@@ -230,32 +218,36 @@ const OwnerDashboard = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {recentBookings.map((booking) => (
-                      <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-rental-teal-100 rounded-full flex items-center justify-center">
-                            <User className="w-5 h-5 text-rental-teal-600" />
+                    {recentBookings.map((booking) => {
+                      const vehicle = vehicles.find(v => v.id === booking.vehicleId);
+                      return (
+                        <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-10 h-10 bg-rental-teal-100 rounded-full flex items-center justify-center">
+                              <User className="w-5 h-5 text-rental-teal-600" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-rental-navy-800">{booking.renterName}</p>
+                              <p className="text-sm text-rental-navy-500">{vehicle?.name || booking.vehicleName}</p>
+                              <p className="text-xs text-gray-500">{booking.pickupTime}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-rental-navy-800">{booking.renterName}</p>
-                            <p className="text-sm text-rental-navy-500">{booking.vehicleName}</p>
+                          <div className="text-center">
+                            <p className="font-semibold text-rental-navy-800">{booking.amount}</p>
+                            <p className="text-sm text-rental-navy-500">{booking.duration}</p>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant={
+                              booking.status === 'active' ? 'default' : 
+                              booking.status === 'upcoming' ? 'secondary' : 'outline'
+                            }>
+                              {booking.status}
+                            </Badge>
+                            <p className="text-sm text-rental-navy-500 mt-1">{booking.startTime}</p>
                           </div>
                         </div>
-                        <div className="text-center">
-                          <p className="font-semibold text-rental-navy-800">{booking.amount}</p>
-                          <p className="text-sm text-rental-navy-500">{booking.duration}</p>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant={
-                            booking.status === 'active' ? 'default' : 
-                            booking.status === 'upcoming' ? 'secondary' : 'outline'
-                          }>
-                            {booking.status}
-                          </Badge>
-                          <p className="text-sm text-rental-navy-500 mt-1">{booking.startTime}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

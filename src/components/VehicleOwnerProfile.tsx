@@ -1,54 +1,16 @@
 
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Car, Bike, MapPin, Star, Trash2, Edit, Plus, TrendingUp, Clock } from "lucide-react";
+import { Car, Bike, MapPin, Star, Trash2, Plus, TrendingUp, Clock } from "lucide-react";
 import VehicleManagementModal from "./VehicleManagementModal";
 import { useToast } from "@/hooks/use-toast";
-
-interface Vehicle {
-  id: string;
-  name: string;
-  type: string;
-  price: number;
-  location: string;
-  isAvailable: boolean;
-  rating: number;
-  totalBookings: number;
-  totalEarnings: number;
-  lastBooked: string;
-}
+import { useVehicleStore } from "@/hooks/useVehicleStore";
 
 const VehicleOwnerProfile = () => {
   const { toast } = useToast();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    {
-      id: "1",
-      name: "Hero Splendor Plus",
-      type: "bike",
-      price: 150,
-      location: "MG Road, Bangalore",
-      isAvailable: true,
-      rating: 4.8,
-      totalBookings: 24,
-      totalEarnings: 3600,
-      lastBooked: "2 hours ago"
-    },
-    {
-      id: "2",
-      name: "Maruti Swift",
-      type: "car",
-      price: 800,
-      location: "Brigade Road, Bangalore",
-      isAvailable: false,
-      rating: 4.6,
-      totalBookings: 18,
-      totalEarnings: 14400,
-      lastBooked: "Currently booked"
-    }
-  ]);
+  const { vehicles, removeVehicle, updateVehicle, stats } = useVehicleStore();
 
   const getVehicleIcon = (type: string) => {
     return type === 'car' ? <Car className="w-5 h-5" /> : <Bike className="w-5 h-5" />;
@@ -64,7 +26,7 @@ const VehicleOwnerProfile = () => {
   };
 
   const handleRemoveVehicle = (vehicleId: string, vehicleName: string) => {
-    setVehicles(prev => prev.filter(v => v.id !== vehicleId));
+    removeVehicle(vehicleId);
     toast({
       title: "Vehicle Removed",
       description: `${vehicleName} has been removed from your fleet`
@@ -72,24 +34,15 @@ const VehicleOwnerProfile = () => {
   };
 
   const toggleAvailability = (vehicleId: string) => {
-    setVehicles(prev => prev.map(v => 
-      v.id === vehicleId 
-        ? { ...v, isAvailable: !v.isAvailable }
-        : v
-    ));
-    
     const vehicle = vehicles.find(v => v.id === vehicleId);
-    toast({
-      title: "Status Updated",
-      description: `${vehicle?.name} is now ${vehicle?.isAvailable ? 'unavailable' : 'available'}`
-    });
+    if (vehicle) {
+      updateVehicle(vehicleId, { isAvailable: !vehicle.isAvailable });
+      toast({
+        title: "Status Updated",
+        description: `${vehicle.name} is now ${vehicle.isAvailable ? 'unavailable' : 'available'}`
+      });
+    }
   };
-
-  const totalEarnings = vehicles.reduce((sum, vehicle) => sum + vehicle.totalEarnings, 0);
-  const totalBookings = vehicles.reduce((sum, vehicle) => sum + vehicle.totalBookings, 0);
-  const averageRating = vehicles.length > 0 
-    ? (vehicles.reduce((sum, vehicle) => sum + vehicle.rating, 0) / vehicles.length).toFixed(1)
-    : "0.0";
 
   return (
     <div className="space-y-6">
@@ -103,7 +56,7 @@ const VehicleOwnerProfile = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Vehicles</p>
-                <p className="text-2xl font-bold">{vehicles.length}</p>
+                <p className="text-2xl font-bold">{stats.totalVehicles}</p>
               </div>
             </div>
           </CardContent>
@@ -117,7 +70,7 @@ const VehicleOwnerProfile = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Earnings</p>
-                <p className="text-2xl font-bold">₹{totalEarnings.toLocaleString()}</p>
+                <p className="text-2xl font-bold">₹{stats.totalEarnings.toLocaleString()}</p>
               </div>
             </div>
           </CardContent>
@@ -131,7 +84,7 @@ const VehicleOwnerProfile = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Bookings</p>
-                <p className="text-2xl font-bold">{totalBookings}</p>
+                <p className="text-2xl font-bold">{stats.totalBookings}</p>
               </div>
             </div>
           </CardContent>
@@ -145,7 +98,7 @@ const VehicleOwnerProfile = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Avg Rating</p>
-                <p className="text-2xl font-bold">{averageRating}</p>
+                <p className="text-2xl font-bold">{stats.averageRating}</p>
               </div>
             </div>
           </CardContent>
@@ -155,7 +108,7 @@ const VehicleOwnerProfile = () => {
       <Tabs defaultValue="vehicles" className="space-y-4">
         <div className="flex items-center justify-between">
           <TabsList>
-            <TabsTrigger value="vehicles">My Vehicles</TabsTrigger>
+            <TabsTrigger value="vehicles">My Vehicles ({vehicles.length})</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
           </TabsList>
           
@@ -186,6 +139,11 @@ const VehicleOwnerProfile = () => {
                             <Badge variant={vehicle.isAvailable ? "default" : "secondary"}>
                               {vehicle.isAvailable ? "Available" : "Booked"}
                             </Badge>
+                            {vehicle.isAvailable && (
+                              <Badge className="bg-rental-trust-green text-white">
+                                Ready for Booking
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
                             <div className="flex items-center space-x-1">
@@ -196,6 +154,9 @@ const VehicleOwnerProfile = () => {
                               <Star className="w-3 h-3 text-yellow-500 fill-current" />
                               <span>{vehicle.rating}</span>
                             </div>
+                            <Badge variant="outline" className="text-xs">
+                              GPS: {vehicle.gpsStatus}
+                            </Badge>
                           </div>
                           <div className="grid grid-cols-3 gap-4 text-sm">
                             <div>
@@ -246,7 +207,7 @@ const VehicleOwnerProfile = () => {
             <Card>
               <CardContent className="p-8 text-center">
                 <Car className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                <h3 className="text-lg font-semibold mb-2">No Vehicles Added</h3>
+                <h3 className="text-lg font-semibold mb-2">No vehicles listed yet</h3>
                 <p className="text-gray-600 mb-4">
                   Start by adding your first vehicle to begin earning
                 </p>
@@ -270,22 +231,26 @@ const VehicleOwnerProfile = () => {
                 <CardTitle>Top Performing Vehicles</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {vehicles
-                    .sort((a, b) => b.totalEarnings - a.totalEarnings)
-                    .slice(0, 3)
-                    .map((vehicle, index) => (
-                      <div key={vehicle.id} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-6 h-6 bg-rental-teal-100 rounded-full flex items-center justify-center text-xs font-semibold">
-                            {index + 1}
+                {vehicles.length > 0 ? (
+                  <div className="space-y-3">
+                    {vehicles
+                      .sort((a, b) => b.totalEarnings - a.totalEarnings)
+                      .slice(0, 3)
+                      .map((vehicle, index) => (
+                        <div key={vehicle.id} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-6 h-6 bg-rental-teal-100 rounded-full flex items-center justify-center text-xs font-semibold">
+                              {index + 1}
+                            </div>
+                            <span className="font-medium">{vehicle.name}</span>
                           </div>
-                          <span className="font-medium">{vehicle.name}</span>
+                          <span className="text-sm font-semibold">₹{vehicle.totalEarnings}</span>
                         </div>
-                        <span className="text-sm font-semibold">₹{vehicle.totalEarnings}</span>
-                      </div>
-                    ))}
-                </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500">No performance data available</p>
+                )}
               </CardContent>
             </Card>
 
@@ -298,20 +263,20 @@ const VehicleOwnerProfile = () => {
                   <div className="flex justify-between">
                     <span>Available Vehicles</span>
                     <span className="font-semibold text-green-600">
-                      {vehicles.filter(v => v.isAvailable).length}
+                      {stats.availableVehicles}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Currently Booked</span>
                     <span className="font-semibold text-blue-600">
-                      {vehicles.filter(v => !v.isAvailable).length}
+                      {stats.totalVehicles - stats.availableVehicles}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Utilization Rate</span>
                     <span className="font-semibold">
-                      {vehicles.length > 0 
-                        ? Math.round((vehicles.filter(v => !v.isAvailable).length / vehicles.length) * 100)
+                      {stats.totalVehicles > 0 
+                        ? Math.round(((stats.totalVehicles - stats.availableVehicles) / stats.totalVehicles) * 100)
                         : 0}%
                     </span>
                   </div>

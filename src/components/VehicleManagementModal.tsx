@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Car, Bike, Scooter, CheckCircle, Loader2 } from "lucide-react";
+import { Plus, Trash2, Car, Bike, CheckCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useVehicleStore } from "@/hooks/useVehicleStore";
 
@@ -84,7 +84,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
   const getVehicleIcon = (type: string) => {
     switch (type) {
       case 'car': return <Car className="w-4 h-4" />;
-      case 'scooter': return <Scooter className="w-4 h-4" />;
+      case 'scooter': return <Bike className="w-4 h-4" />;
       default: return <Bike className="w-4 h-4" />;
     }
   };

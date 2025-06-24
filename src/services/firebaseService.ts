@@ -1,126 +1,246 @@
 
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
+import { 
+  collection, 
+  doc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  getDocs, 
+  getDoc, 
+  query, 
+  where, 
+  orderBy,
+  onSnapshot,
+  Timestamp 
+} from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { GlobalVehicle, GlobalBooking } from '@/hooks/useAppStore';
+
+// Vehicle interface for Firestore
+export interface FirebaseVehicle {
+  id?: string;
+  name: string;
+  type: 'bike' | 'scooter' | 'car';
+  price: number;
+  location: string;
+  isAvailable: boolean;
+  rating: number;
+  totalBookings: number;
+  totalEarnings: number;
+  lastBooked: string;
+  image?: string;
+  gpsStatus: 'active' | 'inactive';
+  ownerId: string;
+  ownerName: string;
+  features: string[];
+  createdAt: Timestamp;
+}
+
+// Booking interface for Firestore
+export interface FirebaseBooking {
+  id?: string;
+  vehicleId: string;
+  vehicleName: string;
+  vehicleType: 'bike' | 'scooter' | 'car';
+  renterId: string;
+  renterName: string;
+  ownerId: string;
+  ownerName: string;
+  startDate: Timestamp;
+  endDate: Timestamp;
+  pickupTime: string;
+  duration: string;
+  totalAmount: number;
+  status: 'upcoming' | 'active' | 'completed' | 'cancelled';
+  location: string;
+  createdAt: Timestamp;
+}
 
 // Vehicle operations
-export const addVehicleToFirestore = async (vehicle: Omit<GlobalVehicle, 'id'>) => {
-  try {
-    const docRef = await addDoc(collection(db, 'vehicles'), vehicle);
-    return { id: docRef.id, ...vehicle };
-  } catch (error) {
-    console.error('Error adding vehicle: ', error);
-    throw error;
-  }
-};
+export const vehicleService = {
+  // Add a new vehicle (owners only)
+  async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'>): Promise<string> {
+    const docRef = await addDoc(collection(db, 'vehicles'), {
+      ...vehicleData,
+      createdAt: Timestamp.now()
+    });
+    return docRef.id;
+  },
 
-export const getVehiclesFromFirestore = async () => {
-  try {
-    const querySnapshot = await getDocs(collection(db, 'vehicles'));
+  // Get all available vehicles
+  async getAvailableVehicles(): Promise<FirebaseVehicle[]> {
+    const q = query(
+      collection(db, 'vehicles'), 
+      where('isAvailable', '==', true),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    })) as GlobalVehicle[];
-  } catch (error) {
-    console.error('Error getting vehicles: ', error);
-    throw error;
-  }
-};
+    } as FirebaseVehicle));
+  },
 
-export const updateVehicleInFirestore = async (vehicleId: string, updates: Partial<GlobalVehicle>) => {
-  try {
+  // Get vehicles by owner
+  async getVehiclesByOwner(ownerId: string): Promise<FirebaseVehicle[]> {
+    const q = query(
+      collection(db, 'vehicles'), 
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as FirebaseVehicle));
+  },
+
+  // Update vehicle
+  async updateVehicle(vehicleId: string, updates: Partial<FirebaseVehicle>): Promise<void> {
     const vehicleRef = doc(db, 'vehicles', vehicleId);
     await updateDoc(vehicleRef, updates);
-  } catch (error) {
-    console.error('Error updating vehicle: ', error);
-    throw error;
-  }
-};
+  },
 
-export const deleteVehicleFromFirestore = async (vehicleId: string) => {
-  try {
+  // Delete vehicle
+  async deleteVehicle(vehicleId: string): Promise<void> {
     await deleteDoc(doc(db, 'vehicles', vehicleId));
-  } catch (error) {
-    console.error('Error deleting vehicle: ', error);
-    throw error;
+  },
+
+  // Real-time listener for available vehicles
+  onAvailableVehiclesChange(callback: (vehicles: FirebaseVehicle[]) => void) {
+    const q = query(
+      collection(db, 'vehicles'), 
+      where('isAvailable', '==', true),
+      orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const vehicles = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FirebaseVehicle));
+      callback(vehicles);
+    });
   }
 };
 
 // Booking operations
-export const addBookingToFirestore = async (booking: Omit<GlobalBooking, 'id'>) => {
-  try {
+export const bookingService = {
+  // Create a new booking
+  async createBooking(bookingData: Omit<FirebaseBooking, 'id' | 'createdAt'>): Promise<string> {
     const docRef = await addDoc(collection(db, 'bookings'), {
-      ...booking,
-      startDate: booking.startDate.toISOString(),
-      endDate: booking.endDate.toISOString(),
+      ...bookingData,
+      createdAt: Timestamp.now()
     });
-    return { id: docRef.id, ...booking };
-  } catch (error) {
-    console.error('Error adding booking: ', error);
-    throw error;
-  }
-};
-
-export const getBookingsFromFirestore = async () => {
-  try {
-    const querySnapshot = await getDocs(collection(db, 'bookings'));
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-      };
-    }) as GlobalBooking[];
-  } catch (error) {
-    console.error('Error getting bookings: ', error);
-    throw error;
-  }
-};
-
-export const updateBookingInFirestore = async (bookingId: string, updates: Partial<GlobalBooking>) => {
-  try {
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const updateData = { ...updates };
     
-    // Convert dates to ISO strings for Firestore
-    if (updateData.startDate) {
-      updateData.startDate = updateData.startDate.toISOString() as any;
-    }
-    if (updateData.endDate) {
-      updateData.endDate = updateData.endDate.toISOString() as any;
-    }
+    // Update vehicle availability
+    await vehicleService.updateVehicle(bookingData.vehicleId, {
+      isAvailable: false,
+      lastBooked: 'Currently booked'
+    });
     
-    await updateDoc(bookingRef, updateData);
-  } catch (error) {
-    console.error('Error updating booking: ', error);
-    throw error;
-  }
-};
+    return docRef.id;
+  },
 
-// Real-time listeners
-export const subscribeToVehicles = (callback: (vehicles: GlobalVehicle[]) => void) => {
-  return onSnapshot(collection(db, 'vehicles'), (snapshot) => {
-    const vehicles = snapshot.docs.map(doc => ({
+  // Get bookings by renter (users)
+  async getBookingsByRenter(renterId: string): Promise<FirebaseBooking[]> {
+    const q = query(
+      collection(db, 'bookings'), 
+      where('renterId', '==', renterId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    })) as GlobalVehicle[];
-    callback(vehicles);
-  });
+    } as FirebaseBooking));
+  },
+
+  // Get bookings by owner
+  async getBookingsByOwner(ownerId: string): Promise<FirebaseBooking[]> {
+    const q = query(
+      collection(db, 'bookings'), 
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as FirebaseBooking));
+  },
+
+  // Update booking status
+  async updateBookingStatus(bookingId: string, status: FirebaseBooking['status']): Promise<void> {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    await updateDoc(bookingRef, { status });
+    
+    // If booking is completed, make vehicle available again
+    if (status === 'completed') {
+      const bookingDoc = await getDoc(bookingRef);
+      if (bookingDoc.exists()) {
+        const booking = bookingDoc.data() as FirebaseBooking;
+        await vehicleService.updateVehicle(booking.vehicleId, {
+          isAvailable: true,
+          lastBooked: 'Recently completed'
+        });
+      }
+    }
+  },
+
+  // Real-time listener for owner bookings
+  onOwnerBookingsChange(ownerId: string, callback: (bookings: FirebaseBooking[]) => void) {
+    const q = query(
+      collection(db, 'bookings'), 
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const bookings = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FirebaseBooking));
+      callback(bookings);
+    });
+  },
+
+  // Real-time listener for renter bookings
+  onRenterBookingsChange(renterId: string, callback: (bookings: FirebaseBooking[]) => void) {
+    const q = query(
+      collection(db, 'bookings'), 
+      where('renterId', '==', renterId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const bookings = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FirebaseBooking));
+      callback(bookings);
+    });
+  }
 };
 
-export const subscribeToBookings = (callback: (bookings: GlobalBooking[]) => void) => {
-  return onSnapshot(collection(db, 'bookings'), (snapshot) => {
-    const bookings = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-      };
-    }) as GlobalBooking[];
-    callback(bookings);
-  });
+// Profile operations
+export const profileService = {
+  // Update owner statistics
+  async updateOwnerStats(ownerId: string, updates: {
+    totalVehicles?: number;
+    totalEarnings?: number;
+    averageRating?: number;
+  }): Promise<void> {
+    const ownerRef = doc(db, 'owners', ownerId);
+    await updateDoc(ownerRef, updates);
+  },
+
+  // Update user statistics
+  async updateUserStats(userId: string, updates: {
+    totalRides?: number;
+    totalSpent?: number;
+    averageRating?: number;
+  }): Promise<void> {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, updates);
+  }
 };

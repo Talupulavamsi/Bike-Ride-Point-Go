@@ -1,6 +1,11 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/contexts/FirebaseContext';
+import { vehicleService, bookingService, FirebaseVehicle, FirebaseBooking } from '@/services/firebaseService';
+import { Timestamp } from 'firebase/firestore';
 
+// Legacy interfaces for backward compatibility
 export interface GlobalVehicle {
   id: string;
   name: string;
@@ -41,164 +46,199 @@ export interface GlobalBooking {
   startTime: string;
 }
 
-const STORAGE_KEYS = {
-  vehicles: 'global_vehicles',
-  bookings: 'global_bookings'
-};
+// Helper functions to convert between Firebase and legacy formats
+const convertFirebaseVehicle = (fbVehicle: FirebaseVehicle): GlobalVehicle => ({
+  id: fbVehicle.id || '',
+  name: fbVehicle.name,
+  type: fbVehicle.type,
+  price: fbVehicle.price,
+  location: fbVehicle.location,
+  isAvailable: fbVehicle.isAvailable,
+  rating: fbVehicle.rating,
+  totalBookings: fbVehicle.totalBookings,
+  totalEarnings: fbVehicle.totalEarnings,
+  lastBooked: fbVehicle.lastBooked,
+  image: fbVehicle.image,
+  gpsStatus: fbVehicle.gpsStatus,
+  ownerId: fbVehicle.ownerId,
+  ownerName: fbVehicle.ownerName,
+  features: fbVehicle.features
+});
 
-// Simulated real-time event emitter
-class EventEmitter {
-  private listeners: { [key: string]: Function[] } = {};
-
-  on(event: string, callback: Function) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(callback);
-  }
-
-  off(event: string, callback: Function) {
-    if (this.listeners[event]) {
-      this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-    }
-  }
-
-  emit(event: string, data: any) {
-    if (this.listeners[event]) {
-      this.listeners[event].forEach(callback => callback(data));
-    }
-  }
-}
-
-const eventEmitter = new EventEmitter();
+const convertFirebaseBooking = (fbBooking: FirebaseBooking): GlobalBooking => ({
+  id: fbBooking.id || '',
+  vehicleId: fbBooking.vehicleId,
+  vehicleName: fbBooking.vehicleName,
+  vehicleType: fbBooking.vehicleType,
+  renterId: fbBooking.renterId,
+  renterName: fbBooking.renterName,
+  ownerId: fbBooking.ownerId,
+  ownerName: fbBooking.ownerName,
+  startDate: fbBooking.startDate.toDate(),
+  endDate: fbBooking.endDate.toDate(),
+  pickupTime: fbBooking.pickupTime,
+  duration: fbBooking.duration,
+  totalAmount: fbBooking.totalAmount,
+  status: fbBooking.status,
+  location: fbBooking.location,
+  bookingDate: fbBooking.createdAt.toDate().toISOString(),
+  amount: `₹${fbBooking.totalAmount}`,
+  startTime: fbBooking.pickupTime
+});
 
 export const useAppStore = () => {
   const [vehicles, setVehicles] = useState<GlobalVehicle[]>([]);
   const [bookings, setBookings] = useState<GlobalBooking[]>([]);
   const { toast } = useToast();
+  const { userProfile, user } = useFirebase();
 
-  // Load data from localStorage on mount
+  // Load data from Firebase when user changes
   useEffect(() => {
-    const savedVehicles = localStorage.getItem(STORAGE_KEYS.vehicles);
-    const savedBookings = localStorage.getItem(STORAGE_KEYS.bookings);
-
-    if (savedVehicles) {
-      const parsedVehicles = JSON.parse(savedVehicles);
-      setVehicles(parsedVehicles);
+    if (!user || !userProfile) {
+      setVehicles([]);
+      setBookings([]);
+      return;
     }
 
-    if (savedBookings) {
-      const parsedBookings = JSON.parse(savedBookings);
-      const bookingsWithDates = parsedBookings.map((booking: any) => ({
-        ...booking,
-        startDate: new Date(booking.startDate),
-        endDate: new Date(booking.endDate)
-      }));
-      setBookings(bookingsWithDates);
-    }
-  }, []);
-
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.vehicles, JSON.stringify(vehicles));
-  }, [vehicles]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
-  }, [bookings]);
-
-  // Real-time event listeners
-  useEffect(() => {
-    const handleVehicleAdded = (vehicle: GlobalVehicle) => {
-      setVehicles(prev => [...prev, vehicle]);
-      toast({
-        title: "🚗 New Vehicle Available!",
-        description: `${vehicle.name} is now available for booking in ${vehicle.location}`,
-      });
-    };
-
-    const handleVehicleBooked = (booking: GlobalBooking) => {
-      setBookings(prev => [booking, ...prev]);
-      setVehicles(prev => prev.map(v => 
-        v.id === booking.vehicleId 
-          ? { ...v, isAvailable: false, lastBooked: 'Currently booked' }
-          : v
-      ));
-      
-      // Notify owner
-      toast({
-        title: "📋 New Booking Received!",
-        description: `${booking.renterName} booked ${booking.vehicleName} for ${booking.duration}`,
-      });
-    };
-
-    const handleRideCompleted = (bookingId: string) => {
-      setBookings(prev => prev.map(b => 
-        b.id === bookingId ? { ...b, status: 'completed' } : b
-      ));
-      
-      const booking = bookings.find(b => b.id === bookingId);
-      if (booking) {
-        setVehicles(prev => prev.map(v => 
-          v.id === booking.vehicleId 
-            ? { ...v, isAvailable: true, lastBooked: 'Recently completed' }
-            : v
-        ));
-        
-        toast({
-          title: "✅ Ride Completed!",
-          description: `${booking.vehicleName} is now available again`,
-        });
+    // Load available vehicles for all users
+    const loadVehicles = async () => {
+      try {
+        const fbVehicles = await vehicleService.getAvailableVehicles();
+        setVehicles(fbVehicles.map(convertFirebaseVehicle));
+      } catch (error) {
+        console.error('Error loading vehicles:', error);
       }
     };
 
-    eventEmitter.on('vehicleAdded', handleVehicleAdded);
-    eventEmitter.on('vehicleBooked', handleVehicleBooked);
-    eventEmitter.on('rideCompleted', handleRideCompleted);
-
-    return () => {
-      eventEmitter.off('vehicleAdded', handleVehicleAdded);
-      eventEmitter.off('vehicleBooked', handleVehicleBooked);
-      eventEmitter.off('rideCompleted', handleRideCompleted);
-    };
-  }, [toast, bookings]);
-
-  const addVehicle = useCallback((vehicleData: Omit<GlobalVehicle, 'id'>) => {
-    const newVehicle: GlobalVehicle = {
-      ...vehicleData,
-      id: Date.now().toString()
-    };
-
-    // Emit real-time event
-    eventEmitter.emit('vehicleAdded', newVehicle);
-    return newVehicle;
-  }, []);
-
-  const createBooking = useCallback((bookingData: Omit<GlobalBooking, 'id' | 'bookingDate' | 'amount' | 'startTime'>) => {
-    const newBooking: GlobalBooking = {
-      ...bookingData,
-      id: Date.now().toString(),
-      bookingDate: new Date().toISOString(),
-      // Add legacy properties for backward compatibility
-      amount: `₹${bookingData.totalAmount}`,
-      startTime: bookingData.pickupTime
+    // Load bookings based on user role
+    const loadBookings = async () => {
+      try {
+        let fbBookings: FirebaseBooking[] = [];
+        
+        if (userProfile.role === 'owner') {
+          fbBookings = await bookingService.getBookingsByOwner(user.uid);
+        } else {
+          fbBookings = await bookingService.getBookingsByRenter(user.uid);
+        }
+        
+        setBookings(fbBookings.map(convertFirebaseBooking));
+      } catch (error) {
+        console.error('Error loading bookings:', error);
+      }
     };
 
-    // Emit real-time event
-    eventEmitter.emit('vehicleBooked', newBooking);
-    
-    // Show user confirmation
-    toast({
-      title: "🎉 Booking Confirmed!",
-      description: `Your booking for ${newBooking.vehicleName} is confirmed. Check My Bookings for details.`,
+    loadVehicles();
+    loadBookings();
+
+    // Set up real-time listeners
+    const unsubscribeVehicles = vehicleService.onAvailableVehiclesChange((fbVehicles) => {
+      setVehicles(fbVehicles.map(convertFirebaseVehicle));
     });
 
-    return newBooking;
+    let unsubscribeBookings: (() => void) | undefined;
+    if (userProfile.role === 'owner') {
+      unsubscribeBookings = bookingService.onOwnerBookingsChange(user.uid, (fbBookings) => {
+        setBookings(fbBookings.map(convertFirebaseBooking));
+      });
+    } else {
+      unsubscribeBookings = bookingService.onRenterBookingsChange(user.uid, (fbBookings) => {
+        setBookings(fbBookings.map(convertFirebaseBooking));
+      });
+    }
+
+    return () => {
+      unsubscribeVehicles();
+      unsubscribeBookings?.();
+    };
+  }, [user, userProfile]);
+
+  const addVehicle = useCallback(async (vehicleData: Omit<GlobalVehicle, 'id'>) => {
+    if (!user || !userProfile || userProfile.role !== 'owner') {
+      throw new Error('Only owners can add vehicles');
+    }
+
+    try {
+      const fbVehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'> = {
+        ...vehicleData,
+        ownerId: user.uid,
+        ownerName: userProfile.name
+      };
+
+      const vehicleId = await vehicleService.addVehicle(fbVehicleData);
+      
+      toast({
+        title: "🚗 Vehicle Added!",
+        description: `${vehicleData.name} has been added to your fleet`,
+      });
+
+      return { ...vehicleData, id: vehicleId };
+    } catch (error) {
+      console.error('Error adding vehicle:', error);
+      throw error;
+    }
+  }, [user, userProfile, toast]);
+
+  const createBooking = useCallback(async (bookingData: Omit<GlobalBooking, 'id' | 'bookingDate' | 'amount' | 'startTime'>) => {
+    if (!user || !userProfile) {
+      throw new Error('User must be logged in to create booking');
+    }
+
+    try {
+      const fbBookingData: Omit<FirebaseBooking, 'id' | 'createdAt'> = {
+        ...bookingData,
+        startDate: Timestamp.fromDate(bookingData.startDate),
+        endDate: Timestamp.fromDate(bookingData.endDate),
+        renterId: user.uid,
+        renterName: userProfile.name
+      };
+
+      const bookingId = await bookingService.createBooking(fbBookingData);
+      
+      toast({
+        title: "🎉 Booking Confirmed!",
+        description: `Your booking for ${bookingData.vehicleName} is confirmed.`,
+      });
+
+      return {
+        ...bookingData,
+        id: bookingId,
+        bookingDate: new Date().toISOString(),
+        amount: `₹${bookingData.totalAmount}`,
+        startTime: bookingData.pickupTime
+      };
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      throw error;
+    }
+  }, [user, userProfile, toast]);
+
+  const completeRide = useCallback(async (bookingId: string) => {
+    try {
+      await bookingService.updateBookingStatus(bookingId, 'completed');
+      
+      toast({
+        title: "✅ Ride Completed!",
+        description: "The vehicle is now available again",
+      });
+    } catch (error) {
+      console.error('Error completing ride:', error);
+      throw error;
+    }
   }, [toast]);
 
-  const completeRide = useCallback((bookingId: string) => {
-    eventEmitter.emit('rideCompleted', bookingId);
-  }, []);
+  const updateBookingStatus = useCallback(async (bookingId: string, status: GlobalBooking['status']) => {
+    try {
+      await bookingService.updateBookingStatus(bookingId, status);
+      
+      toast({
+        title: "Booking Updated",
+        description: `Booking status changed to ${status}`,
+      });
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      throw error;
+    }
+  }, [toast]);
 
   const getAvailableVehicles = () => vehicles.filter(v => v.isAvailable);
   
@@ -214,10 +254,10 @@ export const useAppStore = () => {
     addVehicle,
     createBooking,
     completeRide,
+    updateBookingStatus,
     getAvailableVehicles,
     getVehiclesByOwner,
     getBookingsByOwner,
-    getBookingsByRenter,
-    eventEmitter
+    getBookingsByRenter
   };
 };

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,11 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Upload, AlertCircle, MapPin, Car } from "lucide-react";
 import { useFirebase } from "@/contexts/FirebaseContext";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 interface AuthModalProps {
-  role: 'renter' | 'owner' | null;
+  role: 'user' | 'owner' | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -38,7 +35,7 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
   });
   
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useFirebase();
+  const { signIn, signUp, updateProfile } = useFirebase();
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -57,23 +54,20 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
   };
 
   const handleSignup = async () => {
+    if (!role) return;
+    
     setLoading(true);
     try {
-      await signUp(formData.email, formData.password);
-      
-      // Store user profile in Firestore
-      const userDoc = doc(db, 'users', formData.email);
-      await setDoc(userDoc, {
+      await signUp(formData.email, formData.password, {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
         role: role,
-        kycCompleted: false,
-        createdAt: new Date().toISOString()
+        kycCompleted: false
       });
 
-      // Only proceed to KYC for renters
-      if (role === 'renter') {
+      // Only proceed to KYC for users (renters)
+      if (role === 'user') {
         setCurrentStep('kyc');
       } else {
         onSuccess();
@@ -100,12 +94,10 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
         setKycProgress(100);
         setCurrentStep('verification');
         
-        // Update KYC status in Firestore
-        const userDoc = doc(db, 'users', formData.email);
-        await setDoc(userDoc, {
-          kycCompleted: true,
-          kycCompletedAt: new Date().toISOString()
-        }, { merge: true });
+        // Update KYC status in Firebase
+        await updateProfile({
+          kycCompleted: true
+        });
         
         setTimeout(() => onSuccess(), 2000);
       }, 1000);
@@ -118,15 +110,15 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
         <DialogHeader>
           <div className="flex items-center space-x-3 mb-2">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              role === 'renter' ? 'bg-rental-teal-500' : 'bg-rental-lime-500'
+              role === 'user' ? 'bg-rental-teal-500' : 'bg-rental-lime-500'
             }`}>
-              {role === 'renter' ? 
+              {role === 'user' ? 
                 <MapPin className="w-5 h-5 text-white" /> : 
                 <Car className="w-5 h-5 text-white" />
               }
             </div>
             <DialogTitle>
-              {role === 'renter' ? 'Join as Renter' : 'Join as Owner'}
+              {role === 'user' ? 'Join as Renter' : 'Join as Owner'}
             </DialogTitle>
           </div>
         </DialogHeader>
@@ -206,7 +198,7 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
               onClick={isLogin ? handleLogin : handleSignup}
               disabled={loading}
               className={`w-full ${
-                role === 'renter' 
+                role === 'user' 
                   ? 'bg-rental-teal-500 hover:bg-rental-teal-600' 
                   : 'bg-rental-lime-500 hover:bg-rental-lime-600'
               }`}
@@ -216,7 +208,7 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
           </div>
         )}
 
-        {/* KYC Introduction - Only for renters during signup */}
+        {/* KYC Introduction - Only for users during signup */}
         {currentStep === 'kyc' && (
           <div className="space-y-6">
             <Card className="bg-rental-teal-50 border-rental-teal-200">

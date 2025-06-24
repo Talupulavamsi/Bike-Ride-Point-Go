@@ -35,7 +35,7 @@ const STORAGE_KEYS = {
 
 export const useRenterStore = () => {
   const [renter, setRenter] = useState<Renter | null>(null);
-  const { getBookingsByRenter, createBooking } = useAppStore();
+  const { getBookingsByRenter, createBooking, completeRide } = useAppStore();
 
   // Load renter data from localStorage on mount
   useEffect(() => {
@@ -78,6 +78,13 @@ export const useRenterStore = () => {
     return newBooking;
   }, [createBooking, renter]);
 
+  const updateBookingStatus = useCallback((bookingId: string, status: 'upcoming' | 'active' | 'completed' | 'cancelled') => {
+    if (status === 'completed') {
+      completeRide(bookingId);
+    }
+    // For other status updates, we could extend the global store if needed
+  }, [completeRide]);
+
   // Get bookings for current renter from global state
   const bookings = renter ? getBookingsByRenter(renter.id) : [];
 
@@ -97,6 +104,7 @@ export const useRenterStore = () => {
     renter,
     stats,
     addBooking,
+    updateBookingStatus,
     getActiveBookings,
     getBookingHistory,
     setRenter

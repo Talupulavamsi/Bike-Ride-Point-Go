@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -37,6 +36,9 @@ export interface GlobalBooking {
   status: 'upcoming' | 'active' | 'completed' | 'cancelled';
   location: string;
   bookingDate: string;
+  // Legacy properties for backward compatibility
+  amount: string;
+  startTime: string;
 }
 
 const STORAGE_KEYS = {
@@ -172,11 +174,14 @@ export const useAppStore = () => {
     return newVehicle;
   }, []);
 
-  const createBooking = useCallback((bookingData: Omit<GlobalBooking, 'id' | 'bookingDate'>) => {
+  const createBooking = useCallback((bookingData: Omit<GlobalBooking, 'id' | 'bookingDate' | 'amount' | 'startTime'>) => {
     const newBooking: GlobalBooking = {
       ...bookingData,
       id: Date.now().toString(),
-      bookingDate: new Date().toISOString()
+      bookingDate: new Date().toISOString(),
+      // Add legacy properties for backward compatibility
+      amount: `₹${bookingData.totalAmount}`,
+      startTime: bookingData.pickupTime
     };
 
     // Emit real-time event

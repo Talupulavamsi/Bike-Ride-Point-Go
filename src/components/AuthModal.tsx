@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Upload, AlertCircle, MapPin, Car } from "lucide-react";
+import { useFirebase } from "@/contexts/FirebaseContext";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface AuthModalProps {
   role: 'renter' | 'owner' | null;
@@ -26,12 +29,59 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
     license: false,
     address: false
   });
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: ''
+  });
+  
+  const [loading, setLoading] = useState(false);
+  const { signIn, signUp } = useFirebase();
 
-  const handleAuth = () => {
-    if (role === 'renter') {
-      setCurrentStep('kyc');
-    } else {
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLogin = async () => {
+    setLoading(true);
+    try {
+      await signIn(formData.email, formData.password);
       onSuccess();
+    } catch (error) {
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    setLoading(true);
+    try {
+      await signUp(formData.email, formData.password);
+      
+      // Store user profile in Firestore
+      const userDoc = doc(db, 'users', formData.email);
+      await setDoc(userDoc, {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        role: role,
+        kycCompleted: false,
+        createdAt: new Date().toISOString()
+      });
+
+      // Only proceed to KYC for renters
+      if (role === 'renter') {
+        setCurrentStep('kyc');
+      } else {
+        onSuccess();
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,15 +90,23 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
     setKycProgress(33);
   };
 
-  const handleDocUpload = (docType: keyof typeof uploadedDocs) => {
+  const handleDocUpload = async (docType: keyof typeof uploadedDocs) => {
     setUploadedDocs(prev => ({ ...prev, [docType]: true }));
     const newProgress = Object.values({ ...uploadedDocs, [docType]: true }).filter(Boolean).length * 33;
     setKycProgress(newProgress);
     
     if (newProgress === 99) {
-      setTimeout(() => {
+      setTimeout(async () => {
         setKycProgress(100);
         setCurrentStep('verification');
+        
+        // Update KYC status in Firestore
+        const userDoc = doc(db, 'users', formData.email);
+        await setDoc(userDoc, {
+          kycCompleted: true,
+          kycCompletedAt: new Date().toISOString()
+        }, { merge: true });
+        
         setTimeout(() => onSuccess(), 2000);
       }, 1000);
     }
@@ -103,37 +161,62 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
               {!isLogin && (
                 <div>
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="Enter your full name" />
+                  <Input 
+                    id="name" 
+                    placeholder="Enter your full name"
+                    value={formData.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                  />
                 </div>
               )}
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="Enter your email" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                />
               </div>
               <div>
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" placeholder="Enter your password" />
+                <Input 
+                  id="password" 
+                  type="password" 
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
+                />
               </div>
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input id="phone" placeholder="+91 98765 43210" />
-              </div>
+              {!isLogin && (
+                <div>
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input 
+                    id="phone" 
+                    placeholder="+91 98765 43210"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
             <Button 
-              onClick={handleAuth}
+              onClick={isLogin ? handleLogin : handleSignup}
+              disabled={loading}
               className={`w-full ${
                 role === 'renter' 
                   ? 'bg-rental-teal-500 hover:bg-rental-teal-600' 
                   : 'bg-rental-lime-500 hover:bg-rental-lime-600'
               }`}
             >
-              {isLogin ? 'Login' : 'Create Account'}
+              {loading ? 'Processing...' : (isLogin ? 'Login' : 'Create Account')}
             </Button>
           </div>
         )}
 
-        {/* KYC Introduction */}
+        {/* KYC Introduction - Only for renters during signup */}
         {currentStep === 'kyc' && (
           <div className="space-y-6">
             <Card className="bg-rental-teal-50 border-rental-teal-200">

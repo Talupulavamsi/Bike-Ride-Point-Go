@@ -1,11 +1,22 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+
+interface UserProfile {
+  name: string;
+  email: string;
+  phone: string;
+  role: 'renter' | 'owner';
+  kycCompleted: boolean;
+  createdAt: string;
+}
 
 interface FirebaseContextType {
   user: User | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
@@ -24,12 +35,30 @@ export const useFirebase = () => {
 
 export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      
+      if (user) {
+        // Fetch user profile from Firestore
+        try {
+          const userDoc = doc(db, 'users', user.email!);
+          const userSnap = await getDoc(userDoc);
+          
+          if (userSnap.exists()) {
+            setUserProfile(userSnap.data() as UserProfile);
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+        }
+      } else {
+        setUserProfile(null);
+      }
+      
       setLoading(false);
     });
 
@@ -73,6 +102,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const logout = async () => {
     try {
       await signOut(auth);
+      setUserProfile(null);
       toast({
         title: "Signed out",
         description: "You have been successfully signed out.",
@@ -89,6 +119,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const value = {
     user,
+    userProfile,
     loading,
     signIn,
     signUp,

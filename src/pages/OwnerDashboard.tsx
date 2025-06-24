@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +30,7 @@ import EnhancedFleetManagement from "@/components/EnhancedFleetManagement";
 import EnhancedAnalytics from "@/components/EnhancedAnalytics";
 import VehicleManagementModal from "@/components/VehicleManagementModal";
 import { useVehicleStore } from "@/hooks/useVehicleStore";
+import MyFleet from "@/components/MyFleet";
 
 const OwnerDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
@@ -131,8 +131,9 @@ const OwnerDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="myfleet">My Fleet</TabsTrigger>
             <TabsTrigger value="forecasting">Forecasting</TabsTrigger>
             <TabsTrigger value="heatmaps">Demand Maps</TabsTrigger>
             <TabsTrigger value="vehicles">Fleet</TabsTrigger>
@@ -252,6 +253,10 @@ const OwnerDashboard = () => {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="myfleet">
+            <MyFleet />
           </TabsContent>
 
           <TabsContent value="forecasting">

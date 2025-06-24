@@ -1,5 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
+import { useAppStore } from './useAppStore';
 
 export interface RenterBooking {
   id: string;
@@ -29,29 +30,16 @@ export interface Renter {
 }
 
 const STORAGE_KEYS = {
-  bookings: 'renter_bookings',
   renter: 'renter_profile'
 };
 
 export const useRenterStore = () => {
-  const [bookings, setBookings] = useState<RenterBooking[]>([]);
   const [renter, setRenter] = useState<Renter | null>(null);
+  const { getBookingsByRenter, createBooking } = useAppStore();
 
-  // Load data from localStorage on mount
+  // Load renter data from localStorage on mount
   useEffect(() => {
-    const savedBookings = localStorage.getItem(STORAGE_KEYS.bookings);
     const savedRenter = localStorage.getItem(STORAGE_KEYS.renter);
-
-    if (savedBookings) {
-      const parsedBookings = JSON.parse(savedBookings);
-      // Convert date strings back to Date objects
-      const bookingsWithDates = parsedBookings.map((booking: any) => ({
-        ...booking,
-        startDate: new Date(booking.startDate),
-        endDate: new Date(booking.endDate)
-      }));
-      setBookings(bookingsWithDates);
-    }
 
     if (savedRenter) {
       setRenter(JSON.parse(savedRenter));
@@ -71,19 +59,14 @@ export const useRenterStore = () => {
     }
   }, []);
 
-  // Save bookings to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
-  }, [bookings]);
-
   const addBooking = useCallback((bookingData: Omit<RenterBooking, 'id' | 'bookingDate'>) => {
-    const newBooking: RenterBooking = {
-      ...bookingData,
-      id: Date.now().toString(),
-      bookingDate: new Date().toISOString()
-    };
+    if (!renter) return null;
 
-    setBookings(prev => [newBooking, ...prev]);
+    const newBooking = createBooking({
+      ...bookingData,
+      renterId: renter.id,
+      renterName: renter.name
+    });
     
     // Update renter stats
     setRenter(prev => prev ? {
@@ -93,13 +76,10 @@ export const useRenterStore = () => {
     } : prev);
 
     return newBooking;
-  }, []);
+  }, [createBooking, renter]);
 
-  const updateBookingStatus = useCallback((bookingId: string, status: RenterBooking['status']) => {
-    setBookings(prev => prev.map(b => 
-      b.id === bookingId ? { ...b, status } : b
-    ));
-  }, []);
+  // Get bookings for current renter from global state
+  const bookings = renter ? getBookingsByRenter(renter.id) : [];
 
   const getActiveBookings = () => bookings.filter(b => b.status === 'active' || b.status === 'upcoming');
   const getBookingHistory = () => bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
@@ -117,7 +97,6 @@ export const useRenterStore = () => {
     renter,
     stats,
     addBooking,
-    updateBookingStatus,
     getActiveBookings,
     getBookingHistory,
     setRenter

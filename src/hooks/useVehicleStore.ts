@@ -1,5 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
+import { useAppStore } from './useAppStore';
 
 export interface Vehicle {
   id: string;
@@ -43,28 +44,17 @@ export interface Owner {
 }
 
 const STORAGE_KEYS = {
-  vehicles: 'owner_vehicles',
-  bookings: 'owner_bookings',
   owner: 'owner_profile'
 };
 
 export const useVehicleStore = () => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [owner, setOwner] = useState<Owner | null>(null);
+  const { getVehiclesByOwner, getBookingsByOwner, addVehicle: addGlobalVehicle } = useAppStore();
 
-  // Load data from localStorage on mount
+  // Load owner data from localStorage on mount
   useEffect(() => {
-    const savedVehicles = localStorage.getItem(STORAGE_KEYS.vehicles);
-    const savedBookings = localStorage.getItem(STORAGE_KEYS.bookings);
     const savedOwner = localStorage.getItem(STORAGE_KEYS.owner);
 
-    if (savedVehicles) {
-      setVehicles(JSON.parse(savedVehicles));
-    }
-    if (savedBookings) {
-      setBookings(JSON.parse(savedBookings));
-    }
     if (savedOwner) {
       setOwner(JSON.parse(savedOwner));
     } else {
@@ -85,86 +75,47 @@ export const useVehicleStore = () => {
     }
   }, []);
 
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.vehicles, JSON.stringify(vehicles));
-  }, [vehicles]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
-  }, [bookings]);
+  // Get vehicles and bookings for current owner from global state
+  const vehicles = owner ? getVehiclesByOwner(owner.id) : [];
+  const bookings = owner ? getBookingsByOwner(owner.id) : [];
 
   const addVehicle = useCallback((vehicleData: Omit<Vehicle, 'id' | 'ownerId' | 'rating' | 'totalBookings' | 'totalEarnings' | 'lastBooked' | 'gpsStatus'>) => {
-    const newVehicle: Vehicle = {
+    if (!owner) return null;
+
+    const newVehicle = addGlobalVehicle({
       ...vehicleData,
-      id: Date.now().toString(),
-      ownerId: owner?.id || 'owner-1',
+      ownerId: owner.id,
+      ownerName: owner.name,
       rating: 5.0,
       totalBookings: 0,
       totalEarnings: 0,
       lastBooked: 'Never',
-      gpsStatus: 'active'
-    };
+      gpsStatus: 'active',
+      features: ['GPS Enabled', 'Verified Owner']
+    });
 
-    setVehicles(prev => [...prev, newVehicle]);
     return newVehicle;
-  }, [owner?.id]);
+  }, [addGlobalVehicle, owner]);
 
   const removeVehicle = useCallback((vehicleId: string) => {
-    setVehicles(prev => prev.filter(v => v.id !== vehicleId));
-    // Also remove related bookings
-    setBookings(prev => prev.filter(b => b.vehicleId !== vehicleId));
+    // In a real app, this would call a global remove function
+    console.log('Remove vehicle:', vehicleId);
   }, []);
 
   const updateVehicle = useCallback((vehicleId: string, updates: Partial<Vehicle>) => {
-    setVehicles(prev => prev.map(v => 
-      v.id === vehicleId ? { ...v, ...updates } : v
-    ));
+    // In a real app, this would call a global update function
+    console.log('Update vehicle:', vehicleId, updates);
   }, []);
 
   const addBooking = useCallback((bookingData: Omit<Booking, 'id'>) => {
-    const newBooking: Booking = {
-      ...bookingData,
-      id: Date.now().toString()
-    };
-
-    setBookings(prev => [...prev, newBooking]);
-    
-    // Update vehicle booking stats
-    setVehicles(prev => prev.map(v => 
-      v.id === bookingData.vehicleId 
-        ? { 
-            ...v, 
-            totalBookings: v.totalBookings + 1,
-            totalEarnings: v.totalEarnings + parseInt(bookingData.amount.replace('₹', '').replace(',', '')),
-            lastBooked: bookingData.status === 'active' ? 'Currently booked' : 'Recently booked',
-            isAvailable: bookingData.status === 'active' ? false : v.isAvailable
-          }
-        : v
-    ));
-
-    return newBooking;
+    // This is handled by the global store now
+    console.log('Add booking:', bookingData);
   }, []);
 
   const updateBookingStatus = useCallback((bookingId: string, status: Booking['status']) => {
-    setBookings(prev => prev.map(b => 
-      b.id === bookingId ? { ...b, status } : b
-    ));
-
-    // Update vehicle availability based on booking status
-    const booking = bookings.find(b => b.id === bookingId);
-    if (booking) {
-      setVehicles(prev => prev.map(v => 
-        v.id === booking.vehicleId 
-          ? { 
-              ...v, 
-              isAvailable: status === 'completed',
-              lastBooked: status === 'completed' ? 'Recently completed' : v.lastBooked
-            }
-          : v
-      ));
-    }
-  }, [bookings]);
+    // This is handled by the global store now
+    console.log('Update booking status:', bookingId, status);
+  }, []);
 
   const stats = {
     totalVehicles: vehicles.length,

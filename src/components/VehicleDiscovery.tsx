@@ -73,7 +73,7 @@ const VehicleDiscovery = () => {
                 key={vehicle.id}
                 vehicle={vehicle}
                 onClick={() => console.log('Vehicle clicked:', vehicle.id)}
-                userRole="user"
+                userRole="renter"
               />
             ))}
           </div>

@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import NotificationSystem from "./NotificationSystem";
 
 interface DashboardHeaderProps {
-  userRole: 'owner' | 'renter';
+  userRole: 'owner' | 'renter' | 'user';
 }
 
 const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
@@ -29,6 +29,9 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
     navigate(path);
     setShowMobileMenu(false);
   };
+
+  // Normalize role for NotificationSystem (convert 'renter' to 'user')
+  const normalizedRole = userRole === 'renter' ? 'user' : userRole;
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
@@ -63,7 +66,7 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
               Home
             </Button>
 
-            <NotificationSystem userRole={userRole} userId={userId} />
+            <NotificationSystem userRole={normalizedRole} userId={userId} />
 
             {/* User Menu */}
             <div className="flex items-center space-x-3">
@@ -121,7 +124,7 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
               
               <div className="px-4 flex items-center justify-between">
                 <span className="text-sm text-gray-600">Notifications</span>
-                <NotificationSystem userRole={userRole} userId={userId} />
+                <NotificationSystem userRole={normalizedRole} userId={userId} />
               </div>
 
               <Button

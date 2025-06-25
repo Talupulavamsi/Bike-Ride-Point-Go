@@ -17,6 +17,7 @@ import BookingHistory from "@/components/BookingHistory";
 import ProfileSettings from "@/components/ProfileSettings";
 import BookingInterface from "@/components/BookingInterface";
 import { useRenterStore } from "@/hooks/useRenterStore";
+import AddVehicleForm from "@/components/AddVehicleForm";
 
 const RenterDashboard = () => {
   const [activeTab, setActiveTab] = useState("discover");
@@ -136,8 +137,9 @@ const RenterDashboard = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="discover">Discover & Book</TabsTrigger>
+            <TabsTrigger value="list-vehicle">List Vehicle</TabsTrigger>
             <TabsTrigger value="bookings">My Bookings</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
@@ -145,6 +147,10 @@ const RenterDashboard = () => {
 
           <TabsContent value="discover" className="space-y-6">
             <BookingInterface />
+          </TabsContent>
+
+          <TabsContent value="list-vehicle">
+            <AddVehicleForm />
           </TabsContent>
 
           <TabsContent value="bookings">

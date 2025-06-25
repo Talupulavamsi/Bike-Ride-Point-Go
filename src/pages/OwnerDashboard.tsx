@@ -60,6 +60,7 @@ const OwnerDashboard = () => {
     }
   }, [vehicles.length, bookings.length, addBooking, vehicles]);
 
+  // Update dashboard stats to include user-submitted vehicles
   const dashboardStats = [
     {
       title: "Total Earnings",
@@ -70,7 +71,7 @@ const OwnerDashboard = () => {
       color: "text-rental-trust-green"
     },
     {
-      title: "Active Vehicles",
+      title: "My Vehicles",
       value: stats.totalVehicles.toString(),
       change: `${stats.availableVehicles} available`,
       changeType: "neutral" as const,

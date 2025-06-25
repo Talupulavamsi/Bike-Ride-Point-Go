@@ -1,4 +1,3 @@
-
 import { 
   collection, 
   doc, 
@@ -59,15 +58,51 @@ export interface FirebaseBooking {
 
 // Vehicle operations
 export const vehicleService = {
-  // Add a new vehicle (owners only)
+  // Add a new vehicle with automatic owner registration
   async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'vehicles'), {
-      ...vehicleData,
-      status: 'available',
-      isAvailable: true,
-      createdAt: Timestamp.now()
+    return await runTransaction(db, async (transaction) => {
+      // Check if user exists as an owner, if not create owner profile
+      const ownerRef = doc(db, 'owners', vehicleData.ownerId);
+      const ownerDoc = await transaction.get(ownerRef);
+      
+      if (!ownerDoc.exists()) {
+        // Auto-register user as owner
+        const userRef = doc(db, 'users', vehicleData.ownerId);
+        const userDoc = await transaction.get(userRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Create owner profile from user data
+          transaction.set(ownerRef, {
+            ...userData,
+            role: 'owner',
+            totalVehicles: 1,
+            totalEarnings: 0,
+            averageRating: 5.0,
+            joinedAsOwner: Timestamp.now(),
+            source: 'user-submitted'
+          });
+        }
+      } else {
+        // Update vehicle count for existing owner
+        const ownerData = ownerDoc.data();
+        transaction.update(ownerRef, {
+          totalVehicles: (ownerData.totalVehicles || 0) + 1
+        });
+      }
+      
+      // Add the vehicle
+      const vehicleRef = doc(collection(db, 'vehicles'));
+      transaction.set(vehicleRef, {
+        ...vehicleData,
+        status: 'available',
+        isAvailable: true,
+        createdAt: Timestamp.now(),
+        source: 'user-submitted'
+      });
+      
+      return vehicleRef.id;
     });
-    return docRef.id;
   },
 
   // Get all available vehicles for users

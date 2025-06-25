@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Car, Loader2, Upload } from "lucide-react";
+import { Plus, Car, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase } from "@/contexts/FirebaseContext";
 import { useAppStore } from "@/hooks/useAppStore";
@@ -18,8 +18,8 @@ const AddVehicleForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [vehicleData, setVehicleData] = useState({
-    name: "",
-    type: "" as "bike" | "scooter" | "car" | "",
+    vehicleName: "",
+    vehicleType: "" as "bike" | "scooter" | "car" | "",
     price: "",
     location: "",
     description: "",
@@ -36,7 +36,7 @@ const AddVehicleForm = () => {
       return;
     }
 
-    if (!vehicleData.name || !vehicleData.type || !vehicleData.price || !vehicleData.location) {
+    if (!vehicleData.vehicleName || !vehicleData.vehicleType || !vehicleData.price || !vehicleData.location) {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields",
@@ -48,10 +48,10 @@ const AddVehicleForm = () => {
     setIsSubmitting(true);
 
     try {
-      // Add vehicle with user-submitted flag
+      // Add vehicle with correct schema
       const vehicle = await addVehicle({
-        name: vehicleData.name,
-        type: vehicleData.type as "bike" | "scooter" | "car",
+        name: vehicleData.vehicleName,
+        type: vehicleData.vehicleType as "bike" | "scooter" | "car",
         price: parseInt(vehicleData.price),
         location: vehicleData.location,
         isAvailable: true,
@@ -68,8 +68,8 @@ const AddVehicleForm = () => {
 
       // Reset form
       setVehicleData({
-        name: "",
-        type: "",
+        vehicleName: "",
+        vehicleType: "",
         price: "",
         location: "",
         description: "",
@@ -110,8 +110,8 @@ const AddVehicleForm = () => {
             <Label htmlFor="vehicleName">Vehicle Name *</Label>
             <Input
               id="vehicleName"
-              value={vehicleData.name}
-              onChange={(e) => setVehicleData({...vehicleData, name: e.target.value})}
+              value={vehicleData.vehicleName}
+              onChange={(e) => setVehicleData({...vehicleData, vehicleName: e.target.value})}
               placeholder="e.g. Honda Activa 6G, Maruti Swift"
               disabled={isSubmitting}
             />
@@ -119,7 +119,7 @@ const AddVehicleForm = () => {
           <div>
             <Label htmlFor="vehicleType">Vehicle Type *</Label>
             <Select 
-              onValueChange={(value) => setVehicleData({...vehicleData, type: value as "bike" | "scooter" | "car"})}
+              onValueChange={(value) => setVehicleData({...vehicleData, vehicleType: value as "bike" | "scooter" | "car"})}
               disabled={isSubmitting}
             >
               <SelectTrigger>

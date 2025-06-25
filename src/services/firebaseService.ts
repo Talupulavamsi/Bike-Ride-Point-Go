@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   doc, 
@@ -11,7 +12,8 @@ import {
   orderBy,
   onSnapshot,
   Timestamp,
-  runTransaction
+  runTransaction,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -33,6 +35,7 @@ export interface FirebaseVehicle {
   ownerId: string;
   ownerName: string;
   features: string[];
+  source: 'user-submitted' | 'admin-added';
   createdAt: Timestamp;
 }
 
@@ -59,14 +62,14 @@ export interface FirebaseBooking {
 // Vehicle operations
 export const vehicleService = {
   // Add a new vehicle with automatic owner registration
-  async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'>): Promise<string> {
+  async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt' | 'source'>): Promise<string> {
     return await runTransaction(db, async (transaction) => {
       // Check if user exists as an owner, if not create owner profile
       const ownerRef = doc(db, 'owners', vehicleData.ownerId);
       const ownerDoc = await transaction.get(ownerRef);
       
       if (!ownerDoc.exists()) {
-        // Auto-register user as owner
+        // Auto-register user as owner by copying from users collection
         const userRef = doc(db, 'users', vehicleData.ownerId);
         const userDoc = await transaction.get(userRef);
         
@@ -79,7 +82,7 @@ export const vehicleService = {
             totalVehicles: 1,
             totalEarnings: 0,
             averageRating: 5.0,
-            joinedAsOwner: Timestamp.now(),
+            joinedAsOwner: serverTimestamp(),
             source: 'user-submitted'
           });
         }
@@ -91,14 +94,26 @@ export const vehicleService = {
         });
       }
       
-      // Add the vehicle
+      // Add the vehicle with correct schema
       const vehicleRef = doc(collection(db, 'vehicles'));
       transaction.set(vehicleRef, {
-        ...vehicleData,
+        vehicleName: vehicleData.name,
+        vehicleType: vehicleData.type,
+        price: vehicleData.price,
+        location: vehicleData.location,
         status: 'available',
         isAvailable: true,
-        createdAt: Timestamp.now(),
-        source: 'user-submitted'
+        rating: vehicleData.rating,
+        totalBookings: vehicleData.totalBookings,
+        totalEarnings: vehicleData.totalEarnings,
+        lastBooked: vehicleData.lastBooked,
+        image: vehicleData.image,
+        gpsStatus: vehicleData.gpsStatus,
+        ownerId: vehicleData.ownerId,
+        ownerName: vehicleData.ownerName,
+        features: vehicleData.features,
+        source: 'user-submitted',
+        createdAt: serverTimestamp()
       });
       
       return vehicleRef.id;
@@ -116,11 +131,13 @@ export const vehicleService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
+      name: doc.data().vehicleName || doc.data().name,
+      type: doc.data().vehicleType || doc.data().type,
       ...doc.data()
     } as FirebaseVehicle));
   },
 
-  // Get vehicles by owner
+  // Get vehicles by owner - fetch all vehicles where ownerId matches current user
   async getVehiclesByOwner(ownerId: string): Promise<FirebaseVehicle[]> {
     const q = query(
       collection(db, 'vehicles'), 
@@ -130,6 +147,8 @@ export const vehicleService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
+      name: doc.data().vehicleName || doc.data().name,
+      type: doc.data().vehicleType || doc.data().type,
       ...doc.data()
     } as FirebaseVehicle));
   },
@@ -167,13 +186,15 @@ export const vehicleService = {
     return onSnapshot(q, (querySnapshot) => {
       const vehicles = querySnapshot.docs.map(doc => ({
         id: doc.id,
+        name: doc.data().vehicleName || doc.data().name,
+        type: doc.data().vehicleType || doc.data().type,
         ...doc.data()
       } as FirebaseVehicle));
       callback(vehicles);
     });
   },
 
-  // Real-time listener for owner's vehicles
+  // Real-time listener for owner's vehicles - no role filtering, just ownerId
   onOwnerVehiclesChange(ownerId: string, callback: (vehicles: FirebaseVehicle[]) => void) {
     const q = query(
       collection(db, 'vehicles'), 
@@ -184,6 +205,8 @@ export const vehicleService = {
     return onSnapshot(q, (querySnapshot) => {
       const vehicles = querySnapshot.docs.map(doc => ({
         id: doc.id,
+        name: doc.data().vehicleName || doc.data().name,
+        type: doc.data().vehicleType || doc.data().type,
         ...doc.data()
       } as FirebaseVehicle));
       callback(vehicles);
@@ -213,7 +236,7 @@ export const bookingService = {
       const bookingRef = doc(collection(db, 'bookings'));
       transaction.set(bookingRef, {
         ...bookingData,
-        createdAt: Timestamp.now()
+        createdAt: serverTimestamp()
       });
       
       // Update vehicle status to booked

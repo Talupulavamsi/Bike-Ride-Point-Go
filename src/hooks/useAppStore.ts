@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/contexts/FirebaseContext';
@@ -108,23 +109,30 @@ export const useAppStore = () => {
     let unsubscribeBookings: (() => void) | undefined;
 
     try {
-      // Set up real-time listeners based on user role
-      if (userProfile.role === 'owner') {
-        // Owner sees their own vehicles with live status updates
-        unsubscribeVehicles = vehicleService.onOwnerVehiclesChange(user.uid, (fbVehicles) => {
-          setVehicles(fbVehicles.map(convertFirebaseVehicle));
-        });
+      // Check if user is an owner by looking for vehicles they own
+      // This allows users who submit vehicles to see them in owner dashboard
+      unsubscribeVehicles = vehicleService.onOwnerVehiclesChange(user.uid, (fbVehicles) => {
+        const ownerVehicles = fbVehicles.map(convertFirebaseVehicle);
+        
+        // If user has vehicles, also fetch all available vehicles for booking
+        if (userProfile.role === 'user' && ownerVehicles.length === 0) {
+          // User mode: show all available vehicles
+          vehicleService.onAvailableVehiclesChange((allVehicles) => {
+            setVehicles(allVehicles.map(convertFirebaseVehicle));
+          });
+        } else {
+          // Owner mode: show own vehicles
+          setVehicles(ownerVehicles);
+        }
+      });
 
+      // Set up bookings listener based on role
+      if (userProfile.role === 'owner') {
         // Owner sees bookings for their vehicles
         unsubscribeBookings = bookingService.onOwnerBookingsChange(user.uid, (fbBookings) => {
           setBookings(fbBookings.map(convertFirebaseBooking));
         });
       } else {
-        // Users see all available vehicles
-        unsubscribeVehicles = vehicleService.onAvailableVehiclesChange((fbVehicles) => {
-          setVehicles(fbVehicles.map(convertFirebaseVehicle));
-        });
-
         // Users see their own bookings
         unsubscribeBookings = bookingService.onRenterBookingsChange(user.uid, (fbBookings) => {
           setBookings(fbBookings.map(convertFirebaseBooking));
@@ -149,24 +157,29 @@ export const useAppStore = () => {
     }
 
     try {
-      const fbVehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'> = {
-        ...vehicleData,
+      const fbVehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt' | 'source'> = {
+        name: vehicleData.name,
+        type: vehicleData.type,
+        price: vehicleData.price,
+        location: vehicleData.location,
+        isAvailable: true,
         status: 'available',
+        rating: vehicleData.rating,
+        totalBookings: vehicleData.totalBookings,
+        totalEarnings: vehicleData.totalEarnings,
+        lastBooked: vehicleData.lastBooked,
+        image: vehicleData.image,
+        gpsStatus: vehicleData.gpsStatus,
         ownerId: user.uid,
-        ownerName: userProfile.name
+        ownerName: userProfile.name,
+        features: vehicleData.features
       };
 
       const vehicleId = await vehicleService.addVehicle(fbVehicleData);
       
-      // Update user role to owner if they're not already
-      if (userProfile.role !== 'owner') {
-        // This would typically be handled by the Firebase Context
-        // but for now we'll let the vehicle service handle owner registration
-      }
-      
       toast({
         title: "🚗 Vehicle Listed Successfully!",
-        description: `${vehicleData.name} is now available for booking. Welcome to being an owner!`,
+        description: `${vehicleData.name} is now available for booking. You're automatically registered as an owner!`,
       });
 
       return { ...vehicleData, id: vehicleId, status: 'available' as const };

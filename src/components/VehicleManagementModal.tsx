@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Car, Bike, CheckCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFirebase } from "@/contexts/FirebaseContext";
 import { useAppStore } from "@/hooks/useAppStore";
 
 interface VehicleManagementModalProps {
@@ -17,6 +18,7 @@ interface VehicleManagementModalProps {
 
 const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
   const { toast } = useToast();
+  const { user, userProfile } = useFirebase();
   const { vehicles, addVehicle } = useAppStore();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"add" | "manage">("add");
@@ -29,7 +31,19 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
     location: ""
   });
 
+  // Check if user is authorized to add vehicles (must be owner)
+  const canAddVehicles = user && userProfile && userProfile.role === 'owner';
+
   const handleAddVehicle = async () => {
+    if (!canAddVehicles) {
+      toast({
+        title: "Access Denied",
+        description: "Only vehicle owners can add vehicles",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!newVehicle.name || !newVehicle.type || !newVehicle.price || !newVehicle.location) {
       toast({
         title: "Error",
@@ -53,9 +67,9 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
         totalEarnings: 0,
         lastBooked: 'Never',
         gpsStatus: 'active' as const,
-        ownerId: '',
-        ownerName: '',
-        features: []
+        ownerId: user!.uid,
+        ownerName: userProfile!.name,
+        features: ['GPS Enabled', 'Verified Owner']
       });
 
       setNewVehicle({ name: "", type: "", price: "", location: "" });
@@ -71,6 +85,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
       }, 1000);
 
     } catch (error) {
+      console.error('Error adding vehicle:', error);
       toast({
         title: "Error",
         description: "Failed to add vehicle. Please try again.",
@@ -106,6 +121,16 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
     }
   };
 
+  // Filter vehicles to show only owner's vehicles
+  const ownerVehicles = vehicles.filter(vehicle => 
+    userProfile && vehicle.ownerId === userProfile.uid
+  );
+
+  // Don't render if user is not an owner
+  if (!canAddVehicles) {
+    return null;
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -130,7 +155,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
               variant={activeTab === "manage" ? "default" : "outline"}
               onClick={() => setActiveTab("manage")}
             >
-              Manage Fleet ({vehicles.length})
+              Manage Fleet ({ownerVehicles.length})
             </Button>
           </div>
 
@@ -210,7 +235,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
           {/* Manage Fleet Tab */}
           {activeTab === "manage" && (
             <div className="space-y-4">
-              {vehicles.length === 0 ? (
+              {ownerVehicles.length === 0 ? (
                 <Card>
                   <CardContent className="p-8 text-center">
                     <Car className="w-16 h-16 mx-auto mb-4 text-gray-400" />
@@ -230,14 +255,14 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
               ) : (
                 <>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">Total Vehicles: {vehicles.length}</p>
+                    <p className="text-sm text-gray-600">Total Vehicles: {ownerVehicles.length}</p>
                     <Badge className="bg-rental-trust-green text-white">
                       <CheckCircle className="w-3 h-3 mr-1" />
                       All Synced
                     </Badge>
                   </div>
                   <div className="grid gap-4">
-                    {vehicles.map((vehicle) => (
+                    {ownerVehicles.map((vehicle) => (
                       <Card key={vehicle.id} className="border-l-4 border-l-rental-teal-500">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">

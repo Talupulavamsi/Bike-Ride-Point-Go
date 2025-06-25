@@ -1,5 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
+import { useFirebase } from '@/contexts/FirebaseContext';
 import { useAppStore } from './useAppStore';
 
 export interface Vehicle {
@@ -43,59 +44,31 @@ export interface Owner {
   verified: boolean;
 }
 
-const STORAGE_KEYS = {
-  owner: 'owner_profile'
-};
-
 export const useVehicleStore = () => {
-  const [owner, setOwner] = useState<Owner | null>(null);
-  const { getVehiclesByOwner, getBookingsByOwner, addVehicle: addGlobalVehicle } = useAppStore();
+  const { user, userProfile } = useFirebase();
+  const { vehicles: allVehicles, bookings: allBookings, addVehicle } = useAppStore();
 
-  // Load owner data from localStorage on mount
-  useEffect(() => {
-    const savedOwner = localStorage.getItem(STORAGE_KEYS.owner);
+  // Filter vehicles and bookings for current owner
+  const vehicles = user && userProfile?.role === 'owner' 
+    ? allVehicles.filter(v => v.ownerId === user.uid)
+    : [];
 
-    if (savedOwner) {
-      setOwner(JSON.parse(savedOwner));
-    } else {
-      // Set default owner data
-      const defaultOwner: Owner = {
-        id: 'owner-1',
-        name: 'Rajesh Kumar',
-        email: 'rajesh.kumar@email.com',
-        phone: '+91 98765 43210',
-        aadhaar: '****-****-1234',
-        license: 'KA02-****-5678',
-        location: 'Bangalore, Karnataka',
-        joinDate: 'January 2024',
-        verified: true
-      };
-      setOwner(defaultOwner);
-      localStorage.setItem(STORAGE_KEYS.owner, JSON.stringify(defaultOwner));
-    }
-  }, []);
+  const bookings = user && userProfile?.role === 'owner'
+    ? allBookings.filter(b => b.ownerId === user.uid)
+    : [];
 
-  // Get vehicles and bookings for current owner from global state
-  const vehicles = owner ? getVehiclesByOwner(owner.id) : [];
-  const bookings = owner ? getBookingsByOwner(owner.id) : [];
-
-  const addVehicle = useCallback((vehicleData: Omit<Vehicle, 'id' | 'ownerId' | 'rating' | 'totalBookings' | 'totalEarnings' | 'lastBooked' | 'gpsStatus'>) => {
-    if (!owner) return null;
-
-    const newVehicle = addGlobalVehicle({
-      ...vehicleData,
-      ownerId: owner.id,
-      ownerName: owner.name,
-      rating: 5.0,
-      totalBookings: 0,
-      totalEarnings: 0,
-      lastBooked: 'Never',
-      gpsStatus: 'active',
-      features: ['GPS Enabled', 'Verified Owner']
-    });
-
-    return newVehicle;
-  }, [addGlobalVehicle, owner]);
+  // Use userProfile as owner data
+  const owner = userProfile?.role === 'owner' ? {
+    id: userProfile.uid,
+    name: userProfile.name,
+    email: userProfile.email,
+    phone: userProfile.phone || '',
+    aadhaar: userProfile.aadhaar || '****-****-1234',
+    license: userProfile.license || 'KA02-****-5678',
+    location: userProfile.location || 'Bangalore, Karnataka',
+    joinDate: 'January 2024',
+    verified: userProfile.kycCompleted
+  } : null;
 
   const removeVehicle = useCallback((vehicleId: string) => {
     // In a real app, this would call a global remove function
@@ -138,6 +111,6 @@ export const useVehicleStore = () => {
     updateVehicle,
     addBooking,
     updateBookingStatus,
-    setOwner
+    setOwner: () => {} // Not needed with Firebase context
   };
 };

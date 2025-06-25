@@ -16,76 +16,72 @@ interface Notification {
 }
 
 interface NotificationSystemProps {
-  userRole: 'owner' | 'renter';
+  userRole: 'owner' | 'user';
   userId: string;
 }
 
 const NotificationSystem = ({ userRole, userId }: NotificationSystemProps) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showPanel, setShowPanel] = useState(false);
-  const { eventEmitter } = useAppStore();
+  const { vehicles, bookings } = useAppStore();
 
+  // Monitor for new bookings and create notifications
   useEffect(() => {
-    const handleVehicleAdded = (vehicle: any) => {
-      if (userRole === 'renter') {
-        const notification: Notification = {
-          id: Date.now().toString(),
-          type: 'vehicle_added',
-          title: 'New Vehicle Available!',
-          message: `${vehicle.name} is now available for booking in ${vehicle.location}`,
-          timestamp: new Date(),
-          read: false
-        };
-        setNotifications(prev => [notification, ...prev]);
-      }
-    };
-
-    const handleVehicleBooked = (booking: any) => {
-      if (userRole === 'owner' && booking.ownerId === userId) {
+    const latestBooking = bookings[0]; // Most recent booking
+    if (latestBooking) {
+      if (userRole === 'owner' && latestBooking.ownerId === userId) {
         const notification: Notification = {
           id: Date.now().toString(),
           type: 'booking',
           title: 'New Booking Received!',
-          message: `${booking.renterName} booked ${booking.vehicleName} for ${booking.duration}`,
+          message: `${latestBooking.renterName} booked ${latestBooking.vehicleName} for ${latestBooking.duration}`,
           timestamp: new Date(),
           read: false
         };
-        setNotifications(prev => [notification, ...prev]);
-      } else if (userRole === 'renter' && booking.renterId === userId) {
+        setNotifications(prev => {
+          // Avoid duplicate notifications
+          if (prev.some(n => n.message === notification.message)) return prev;
+          return [notification, ...prev];
+        });
+      } else if (userRole === 'user' && latestBooking.renterId === userId) {
         const notification: Notification = {
           id: Date.now().toString(),
           type: 'booking',
           title: 'Booking Confirmed!',
-          message: `Your booking for ${booking.vehicleName} is confirmed`,
+          message: `Your booking for ${latestBooking.vehicleName} is confirmed`,
           timestamp: new Date(),
           read: false
         };
-        setNotifications(prev => [notification, ...prev]);
+        setNotifications(prev => {
+          // Avoid duplicate notifications
+          if (prev.some(n => n.message === notification.message)) return prev;
+          return [notification, ...prev];
+        });
       }
-    };
+    }
+  }, [bookings, userRole, userId]);
 
-    const handleRideCompleted = (bookingId: string) => {
-      const notification: Notification = {
-        id: Date.now().toString(),
-        type: 'completion',
-        title: 'Ride Completed!',
-        message: 'Thank you for using our service. Rate your experience!',
-        timestamp: new Date(),
-        read: false
-      };
-      setNotifications(prev => [notification, ...prev]);
-    };
-
-    eventEmitter.on('vehicleAdded', handleVehicleAdded);
-    eventEmitter.on('vehicleBooked', handleVehicleBooked);
-    eventEmitter.on('rideCompleted', handleRideCompleted);
-
-    return () => {
-      eventEmitter.off('vehicleAdded', handleVehicleAdded);
-      eventEmitter.off('vehicleBooked', handleVehicleBooked);
-      eventEmitter.off('rideCompleted', handleRideCompleted);
-    };
-  }, [eventEmitter, userRole, userId]);
+  // Monitor for new vehicles and create notifications for users
+  useEffect(() => {
+    if (userRole === 'user' && vehicles.length > 0) {
+      const latestVehicle = vehicles[0]; // Most recent vehicle
+      if (latestVehicle && latestVehicle.isAvailable) {
+        const notification: Notification = {
+          id: Date.now().toString(),
+          type: 'vehicle_added',
+          title: 'New Vehicle Available!',
+          message: `${latestVehicle.name} is now available for booking in ${latestVehicle.location}`,
+          timestamp: new Date(),
+          read: false
+        };
+        setNotifications(prev => {
+          // Avoid duplicate notifications
+          if (prev.some(n => n.message === notification.message)) return prev;
+          return [notification, ...prev];
+        });
+      }
+    }
+  }, [vehicles, userRole]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

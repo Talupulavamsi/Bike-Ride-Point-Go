@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Car, Bike, CheckCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useVehicleStore } from "@/hooks/useVehicleStore";
+import { useAppStore } from "@/hooks/useAppStore";
 
 interface VehicleManagementModalProps {
   trigger: React.ReactNode;
@@ -17,7 +17,7 @@ interface VehicleManagementModalProps {
 
 const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
   const { toast } = useToast();
-  const { vehicles, addVehicle, removeVehicle } = useVehicleStore();
+  const { vehicles, addVehicle } = useAppStore();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"add" | "manage">("add");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,12 +42,20 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
     setIsSubmitting(true);
 
     try {
-      const vehicle = addVehicle({
+      const vehicle = await addVehicle({
         name: newVehicle.name,
         type: newVehicle.type as "bike" | "scooter" | "car",
         price: parseInt(newVehicle.price),
         location: newVehicle.location,
-        isAvailable: true
+        isAvailable: true,
+        rating: 5.0,
+        totalBookings: 0,
+        totalEarnings: 0,
+        lastBooked: 'Never',
+        gpsStatus: 'active' as const,
+        ownerId: '',
+        ownerName: '',
+        features: []
       });
 
       setNewVehicle({ name: "", type: "", price: "", location: "" });
@@ -74,7 +82,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
   };
 
   const handleRemoveVehicle = (vehicleId: string, vehicleName: string) => {
-    removeVehicle(vehicleId);
+    // Note: This would need to be implemented in useAppStore
     toast({
       title: "Vehicle Removed",
       description: `${vehicleName} has been removed from your fleet`

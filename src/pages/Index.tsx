@@ -8,11 +8,11 @@ import { useNavigate } from "react-router-dom";
 import AuthModal from "@/components/AuthModal";
 
 const Index = () => {
-  const [selectedRole, setSelectedRole] = useState<'renter' | 'owner' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'user' | 'owner' | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const navigate = useNavigate();
 
-  const handleRoleSelection = (role: 'renter' | 'owner') => {
+  const handleRoleSelection = (role: 'user' | 'owner') => {
     setSelectedRole(role);
     setShowAuth(true);
   };
@@ -66,7 +66,7 @@ const Index = () => {
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             <Card 
               className="group cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-rental-teal-500/20 bg-white/80 backdrop-blur-sm"
-              onClick={() => handleRoleSelection('renter')}
+              onClick={() => handleRoleSelection('user')}
             >
               <CardHeader className="pb-4">
                 <div className="w-16 h-16 bg-rental-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">

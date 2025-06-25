@@ -11,7 +11,8 @@ import {
   where, 
   orderBy,
   onSnapshot,
-  Timestamp 
+  Timestamp,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -23,6 +24,7 @@ export interface FirebaseVehicle {
   price: number;
   location: string;
   isAvailable: boolean;
+  status: 'available' | 'booked' | 'maintenance';
   rating: number;
   totalBookings: number;
   totalEarnings: number;
@@ -61,15 +63,18 @@ export const vehicleService = {
   async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'>): Promise<string> {
     const docRef = await addDoc(collection(db, 'vehicles'), {
       ...vehicleData,
+      status: 'available',
+      isAvailable: true,
       createdAt: Timestamp.now()
     });
     return docRef.id;
   },
 
-  // Get all available vehicles
+  // Get all available vehicles for users
   async getAvailableVehicles(): Promise<FirebaseVehicle[]> {
     const q = query(
       collection(db, 'vehicles'), 
+      where('status', '==', 'available'),
       where('isAvailable', '==', true),
       orderBy('createdAt', 'desc')
     );
@@ -94,7 +99,17 @@ export const vehicleService = {
     } as FirebaseVehicle));
   },
 
-  // Update vehicle
+  // Update vehicle status (for booking/availability)
+  async updateVehicleStatus(vehicleId: string, status: 'available' | 'booked' | 'maintenance'): Promise<void> {
+    const vehicleRef = doc(db, 'vehicles', vehicleId);
+    await updateDoc(vehicleRef, { 
+      status,
+      isAvailable: status === 'available',
+      lastBooked: status === 'booked' ? 'Currently booked' : 'Recently completed'
+    });
+  },
+
+  // Update vehicle details
   async updateVehicle(vehicleId: string, updates: Partial<FirebaseVehicle>): Promise<void> {
     const vehicleRef = doc(db, 'vehicles', vehicleId);
     await updateDoc(vehicleRef, updates);
@@ -105,11 +120,29 @@ export const vehicleService = {
     await deleteDoc(doc(db, 'vehicles', vehicleId));
   },
 
-  // Real-time listener for available vehicles
+  // Real-time listener for available vehicles (for users)
   onAvailableVehiclesChange(callback: (vehicles: FirebaseVehicle[]) => void) {
     const q = query(
       collection(db, 'vehicles'), 
+      where('status', '==', 'available'),
       where('isAvailable', '==', true),
+      orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const vehicles = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FirebaseVehicle));
+      callback(vehicles);
+    });
+  },
+
+  // Real-time listener for owner's vehicles
+  onOwnerVehiclesChange(ownerId: string, callback: (vehicles: FirebaseVehicle[]) => void) {
+    const q = query(
+      collection(db, 'vehicles'), 
+      where('ownerId', '==', ownerId),
       orderBy('createdAt', 'desc')
     );
     
@@ -123,22 +156,40 @@ export const vehicleService = {
   }
 };
 
-// Booking operations
+// Booking operations with vehicle locking
 export const bookingService = {
-  // Create a new booking
+  // Create a new booking with transaction to prevent double booking
   async createBooking(bookingData: Omit<FirebaseBooking, 'id' | 'createdAt'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'bookings'), {
-      ...bookingData,
-      createdAt: Timestamp.now()
+    return await runTransaction(db, async (transaction) => {
+      // First check if vehicle is still available
+      const vehicleRef = doc(db, 'vehicles', bookingData.vehicleId);
+      const vehicleDoc = await transaction.get(vehicleRef);
+      
+      if (!vehicleDoc.exists()) {
+        throw new Error('Vehicle not found');
+      }
+      
+      const vehicleData = vehicleDoc.data() as FirebaseVehicle;
+      if (vehicleData.status !== 'available' || !vehicleData.isAvailable) {
+        throw new Error('Vehicle is no longer available');
+      }
+      
+      // Create the booking
+      const bookingRef = doc(collection(db, 'bookings'));
+      transaction.set(bookingRef, {
+        ...bookingData,
+        createdAt: Timestamp.now()
+      });
+      
+      // Update vehicle status to booked
+      transaction.update(vehicleRef, {
+        status: 'booked',
+        isAvailable: false,
+        lastBooked: 'Currently booked'
+      });
+      
+      return bookingRef.id;
     });
-    
-    // Update vehicle availability
-    await vehicleService.updateVehicle(bookingData.vehicleId, {
-      isAvailable: false,
-      lastBooked: 'Currently booked'
-    });
-    
-    return docRef.id;
   },
 
   // Get bookings by renter (users)
@@ -169,6 +220,31 @@ export const bookingService = {
     } as FirebaseBooking));
   },
 
+  // Complete a booking and make vehicle available again
+  async completeBooking(bookingId: string): Promise<void> {
+    return await runTransaction(db, async (transaction) => {
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingDoc = await transaction.get(bookingRef);
+      
+      if (!bookingDoc.exists()) {
+        throw new Error('Booking not found');
+      }
+      
+      const booking = bookingDoc.data() as FirebaseBooking;
+      
+      // Update booking status
+      transaction.update(bookingRef, { status: 'completed' });
+      
+      // Make vehicle available again
+      const vehicleRef = doc(db, 'vehicles', booking.vehicleId);
+      transaction.update(vehicleRef, {
+        status: 'available',
+        isAvailable: true,
+        lastBooked: 'Recently completed'
+      });
+    });
+  },
+
   // Update booking status
   async updateBookingStatus(bookingId: string, status: FirebaseBooking['status']): Promise<void> {
     const bookingRef = doc(db, 'bookings', bookingId);
@@ -179,10 +255,7 @@ export const bookingService = {
       const bookingDoc = await getDoc(bookingRef);
       if (bookingDoc.exists()) {
         const booking = bookingDoc.data() as FirebaseBooking;
-        await vehicleService.updateVehicle(booking.vehicleId, {
-          isAvailable: true,
-          lastBooked: 'Recently completed'
-        });
+        await vehicleService.updateVehicleStatus(booking.vehicleId, 'available');
       }
     }
   },
@@ -222,7 +295,7 @@ export const bookingService = {
   }
 };
 
-// Profile operations
+// Profile operations for role-based collections
 export const profileService = {
   // Update owner statistics
   async updateOwnerStats(ownerId: string, updates: {
@@ -234,7 +307,7 @@ export const profileService = {
     await updateDoc(ownerRef, updates);
   },
 
-  // Update user statistics
+  // Update user statistics  
   async updateUserStats(userId: string, updates: {
     totalRides?: number;
     totalSpent?: number;
@@ -242,5 +315,17 @@ export const profileService = {
   }): Promise<void> {
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, updates);
+  },
+
+  // Get owner profile
+  async getOwnerProfile(ownerId: string) {
+    const ownerDoc = await getDoc(doc(db, 'owners', ownerId));
+    return ownerDoc.exists() ? ownerDoc.data() : null;
+  },
+
+  // Get user profile
+  async getUserProfile(userId: string) {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    return userDoc.exists() ? userDoc.data() : null;
   }
 };

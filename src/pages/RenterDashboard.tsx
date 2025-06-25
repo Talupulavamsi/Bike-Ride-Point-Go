@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,7 +67,7 @@ const RenterDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <DashboardHeader userRole="renter" />
+      <DashboardHeader userRole="user" />
       
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-6">

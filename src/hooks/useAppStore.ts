@@ -13,6 +13,7 @@ export interface GlobalVehicle {
   price: number;
   location: string;
   isAvailable: boolean;
+  status: 'available' | 'booked' | 'maintenance';
   rating: number;
   totalBookings: number;
   totalEarnings: number;
@@ -54,6 +55,7 @@ const convertFirebaseVehicle = (fbVehicle: FirebaseVehicle): GlobalVehicle => ({
   price: fbVehicle.price,
   location: fbVehicle.location,
   isAvailable: fbVehicle.isAvailable,
+  status: fbVehicle.status,
   rating: fbVehicle.rating,
   totalBookings: fbVehicle.totalBookings,
   totalEarnings: fbVehicle.totalEarnings,
@@ -89,70 +91,60 @@ const convertFirebaseBooking = (fbBooking: FirebaseBooking): GlobalBooking => ({
 export const useAppStore = () => {
   const [vehicles, setVehicles] = useState<GlobalVehicle[]>([]);
   const [bookings, setBookings] = useState<GlobalBooking[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { userProfile, user } = useFirebase();
 
-  // Load data from Firebase when user changes
+  // Load data from Firebase when user changes with real-time listeners
   useEffect(() => {
     if (!user || !userProfile) {
       setVehicles([]);
       setBookings([]);
+      setLoading(false);
       return;
     }
 
-    // Load available vehicles for all users
-    const loadVehicles = async () => {
-      try {
-        const fbVehicles = await vehicleService.getAvailableVehicles();
-        setVehicles(fbVehicles.map(convertFirebaseVehicle));
-      } catch (error) {
-        console.error('Error loading vehicles:', error);
-      }
-    };
-
-    // Load bookings based on user role
-    const loadBookings = async () => {
-      try {
-        let fbBookings: FirebaseBooking[] = [];
-        
-        if (userProfile.role === 'owner') {
-          fbBookings = await bookingService.getBookingsByOwner(user.uid);
-        } else {
-          fbBookings = await bookingService.getBookingsByRenter(user.uid);
-        }
-        
-        setBookings(fbBookings.map(convertFirebaseBooking));
-      } catch (error) {
-        console.error('Error loading bookings:', error);
-      }
-    };
-
-    loadVehicles();
-    loadBookings();
-
-    // Set up real-time listeners
-    const unsubscribeVehicles = vehicleService.onAvailableVehiclesChange((fbVehicles) => {
-      setVehicles(fbVehicles.map(convertFirebaseVehicle));
-    });
-
+    setLoading(true);
+    let unsubscribeVehicles: (() => void) | undefined;
     let unsubscribeBookings: (() => void) | undefined;
-    if (userProfile.role === 'owner') {
-      unsubscribeBookings = bookingService.onOwnerBookingsChange(user.uid, (fbBookings) => {
-        setBookings(fbBookings.map(convertFirebaseBooking));
-      });
-    } else {
-      unsubscribeBookings = bookingService.onRenterBookingsChange(user.uid, (fbBookings) => {
-        setBookings(fbBookings.map(convertFirebaseBooking));
-      });
+
+    try {
+      // Set up real-time listeners based on user role
+      if (userProfile.role === 'owner') {
+        // Owner sees their own vehicles with live status updates
+        unsubscribeVehicles = vehicleService.onOwnerVehiclesChange(user.uid, (fbVehicles) => {
+          setVehicles(fbVehicles.map(convertFirebaseVehicle));
+        });
+
+        // Owner sees bookings for their vehicles
+        unsubscribeBookings = bookingService.onOwnerBookingsChange(user.uid, (fbBookings) => {
+          setBookings(fbBookings.map(convertFirebaseBooking));
+        });
+      } else {
+        // Users see all available vehicles
+        unsubscribeVehicles = vehicleService.onAvailableVehiclesChange((fbVehicles) => {
+          setVehicles(fbVehicles.map(convertFirebaseVehicle));
+        });
+
+        // Users see their own bookings
+        unsubscribeBookings = bookingService.onRenterBookingsChange(user.uid, (fbBookings) => {
+          setBookings(fbBookings.map(convertFirebaseBooking));
+        });
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error('Error setting up real-time listeners:', error);
+      setLoading(false);
     }
 
     return () => {
-      unsubscribeVehicles();
+      unsubscribeVehicles?.();
       unsubscribeBookings?.();
     };
   }, [user, userProfile]);
 
-  const addVehicle = useCallback(async (vehicleData: Omit<GlobalVehicle, 'id'>) => {
+  const addVehicle = useCallback(async (vehicleData: Omit<GlobalVehicle, 'id' | 'status'>) => {
     if (!user || !userProfile || userProfile.role !== 'owner') {
       throw new Error('Only owners can add vehicles');
     }
@@ -160,6 +152,7 @@ export const useAppStore = () => {
     try {
       const fbVehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt'> = {
         ...vehicleData,
+        status: 'available',
         ownerId: user.uid,
         ownerName: userProfile.name
       };
@@ -168,12 +161,17 @@ export const useAppStore = () => {
       
       toast({
         title: "🚗 Vehicle Added!",
-        description: `${vehicleData.name} has been added to your fleet`,
+        description: `${vehicleData.name} has been added to your fleet and is now available for booking`,
       });
 
-      return { ...vehicleData, id: vehicleId };
+      return { ...vehicleData, id: vehicleId, status: 'available' as const };
     } catch (error) {
       console.error('Error adding vehicle:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add vehicle. Please try again.",
+        variant: "destructive"
+      });
       throw error;
     }
   }, [user, userProfile, toast]);
@@ -196,7 +194,7 @@ export const useAppStore = () => {
       
       toast({
         title: "🎉 Booking Confirmed!",
-        description: `Your booking for ${bookingData.vehicleName} is confirmed.`,
+        description: `Your booking for ${bookingData.vehicleName} is confirmed. Vehicle is now locked for you.`,
       });
 
       return {
@@ -206,22 +204,33 @@ export const useAppStore = () => {
         amount: `₹${bookingData.totalAmount}`,
         startTime: bookingData.pickupTime
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating booking:', error);
+      const errorMessage = error.message || 'Failed to create booking. Please try again.';
+      toast({
+        title: "Booking Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
       throw error;
     }
   }, [user, userProfile, toast]);
 
   const completeRide = useCallback(async (bookingId: string) => {
     try {
-      await bookingService.updateBookingStatus(bookingId, 'completed');
+      await bookingService.completeBooking(bookingId);
       
       toast({
         title: "✅ Ride Completed!",
-        description: "The vehicle is now available again",
+        description: "The vehicle is now available for new bookings",
       });
     } catch (error) {
       console.error('Error completing ride:', error);
+      toast({
+        title: "Error",
+        description: "Failed to complete ride. Please try again.",
+        variant: "destructive"
+      });
       throw error;
     }
   }, [toast]);
@@ -236,11 +245,17 @@ export const useAppStore = () => {
       });
     } catch (error) {
       console.error('Error updating booking status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to update booking status. Please try again.",
+        variant: "destructive"
+      });
       throw error;
     }
   }, [toast]);
 
-  const getAvailableVehicles = () => vehicles.filter(v => v.isAvailable);
+  // Filtered getters
+  const getAvailableVehicles = () => vehicles.filter(v => v.isAvailable && v.status === 'available');
   
   const getVehiclesByOwner = (ownerId: string) => vehicles.filter(v => v.ownerId === ownerId);
   
@@ -251,6 +266,7 @@ export const useAppStore = () => {
   return {
     vehicles,
     bookings,
+    loading,
     addVehicle,
     createBooking,
     completeRide,

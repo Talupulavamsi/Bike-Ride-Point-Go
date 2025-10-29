@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Car, Bike, Search, Navigation, Clock, Battery, Star, Filter } from "lucide-react";
 import VehicleCard from "@/components/VehicleCard";
 import VehicleDetailsModal from "@/components/VehicleDetailsModal";
+import { useAppStore } from "@/hooks/useAppStore";
 
 interface MapInterfaceProps {
   userRole: 'renter' | 'owner' | null;
@@ -27,73 +28,46 @@ interface Vehicle {
   features: string[];
   image: string;
 }
-
-const mockVehicles: Vehicle[] = [
-  {
-    id: '1',
-    type: 'bike',
-    name: 'Hero Splendor Plus',
-    location: { lat: 12.9716, lng: 77.5946, address: 'MG Road, Bangalore' },
-    price: 150,
-    rating: 4.8,
-    distance: 0.3,
-    isAvailable: true,
-    isOnline: true,
-    owner: 'Rajesh Kumar',
-    features: ['Helmet Included', 'GPS Enabled', 'Full Tank'],
-    image: '/placeholder.svg'
-  },
-  {
-    id: '2',
-    type: 'car',
-    name: 'Maruti Swift',
-    location: { lat: 12.9756, lng: 77.5985, address: 'Brigade Road, Bangalore' },
-    price: 800,
-    rating: 4.6,
-    distance: 0.8,
-    isAvailable: true,
-    isOnline: true,
-    owner: 'Priya Singh',
-    features: ['AC', 'GPS', 'Bluetooth', 'Full Tank'],
-    image: '/placeholder.svg'
-  },
-  {
-    id: '3',
-    type: 'scooter',
-    name: 'Ather 450X',
-    location: { lat: 12.9698, lng: 77.5980, address: 'Commercial Street, Bangalore' },
-    price: 200,
-    rating: 4.9,
-    distance: 0.5,
-    battery: 85,
-    isAvailable: true,
-    isOnline: true,
-    owner: 'Amit Patel',
-    features: ['Electric', 'Fast Charging', 'GPS', 'Bluetooth'],
-    image: '/placeholder.svg'
-  },
-  {
-    id: '4',
-    type: 'bike',
-    name: 'Royal Enfield Classic',
-    location: { lat: 12.9730, lng: 77.5910, address: 'UB City Mall, Bangalore' },
-    price: 300,
-    rating: 4.7,
-    distance: 1.2,
-    isAvailable: false,
-    isOnline: true,
-    owner: 'Suresh Reddy',
-    features: ['Vintage Style', 'Powerful Engine', 'GPS'],
-    image: '/placeholder.svg'
-  }
-];
-
 const MapInterface = ({ userRole }: MapInterfaceProps) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles);
+  const { getAvailableVehicles } = useAppStore();
+  const available = getAvailableVehicles();
+  const mapped: Vehicle[] = available.map(v => ({
+    id: v.id,
+    type: v.type,
+    name: v.name,
+    location: { lat: 12.9716, lng: 77.5946, address: v.location },
+    price: v.price,
+    rating: v.rating ?? 0,
+    distance: 0,
+    isAvailable: v.isAvailable,
+    isOnline: v.gpsStatus === 'active',
+    owner: v.ownerName,
+    features: v.features || [],
+    image: v.image || '/placeholder.svg',
+  }));
+  const [vehicles, setVehicles] = useState<Vehicle[]>(mapped);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'bike' | 'car' | 'scooter'>('all');
   const [showSidebar, setShowSidebar] = useState(true);
+
+  useEffect(() => {
+    const next = getAvailableVehicles().map(v => ({
+      id: v.id,
+      type: v.type,
+      name: v.name,
+      location: { lat: 12.9716, lng: 77.5946, address: v.location },
+      price: v.price,
+      rating: v.rating ?? 0,
+      distance: 0,
+      isAvailable: v.isAvailable,
+      isOnline: v.gpsStatus === 'active',
+      owner: v.ownerName,
+      features: v.features || [],
+      image: v.image || '/placeholder.svg',
+    }));
+    setVehicles(next);
+  }, [getAvailableVehicles]);
 
   const filteredVehicles = vehicles.filter(vehicle => {
     const matchesSearch = vehicle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

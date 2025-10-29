@@ -58,12 +58,8 @@ const RenterDashboard = () => {
   ];
 
   const handleVoiceSearch = () => {
-    setIsVoiceSearch(true);
-    // Voice search simulation
-    setTimeout(() => {
-      setSearchQuery("Find electric scooter near me");
-      setIsVoiceSearch(false);
-    }, 2000);
+    // Voice search disabled until real implementation is added
+    setIsVoiceSearch(false);
   };
 
   return (
@@ -110,10 +106,8 @@ const RenterDashboard = () => {
                 />
                 <Button
                   onClick={handleVoiceSearch}
-                  className={`absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 ${
-                    isVoiceSearch ? 'bg-red-500 animate-pulse' : 'bg-rental-teal-500'
-                  }`}
-                  disabled={isVoiceSearch}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 bg-gray-300"
+                  disabled
                 >
                   <Mic className="w-4 h-4" />
                 </Button>
@@ -123,16 +117,7 @@ const RenterDashboard = () => {
                 Filters
               </Button>
             </div>
-            {isVoiceSearch && (
-              <div className="mt-4 text-center">
-                <div className="inline-flex items-center space-x-2 text-rental-teal-600">
-                  <div className="w-2 h-2 bg-rental-teal-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-rental-teal-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-rental-teal-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <span className="ml-2">Listening...</span>
-                </div>
-              </div>
-            )}
+            {/* Voice search UI removed to avoid mock behavior */}
           </CardContent>
         </Card>
 

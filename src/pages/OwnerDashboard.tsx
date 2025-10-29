@@ -36,37 +36,15 @@ const OwnerDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const { stats, bookings, vehicles, addBooking } = useVehicleStore();
 
-  // Add demo bookings only if there are vehicles but no bookings
-  useEffect(() => {
-    if (bookings.length === 0 && vehicles.length > 0) {
-      const demoBookings = [
-        {
-          renterId: "renter-1",
-          renterName: "Amit Kumar",
-          vehicleId: vehicles[0].id,
-          vehicleName: vehicles[0].name,
-          pickupTime: "Today, 9:30 AM",
-          duration: "2 hours",
-          amount: "₹300",
-          status: "active" as const,
-          startTime: "09:30 AM"
-        }
-      ];
-
-      // Add demo booking after a short delay
-      setTimeout(() => {
-        demoBookings.forEach(booking => addBooking(booking));
-      }, 1000);
-    }
-  }, [vehicles.length, bookings.length, addBooking, vehicles]);
+  // Remove demo bookings: use only real data
 
   // Update dashboard stats to include user-submitted vehicles
   const dashboardStats = [
     {
       title: "Total Earnings",
       value: `₹${stats.totalEarnings.toLocaleString()}`,
-      change: "+12%",
-      changeType: "positive" as const,
+      change: "",
+      changeType: "neutral" as const,
       icon: DollarSign,
       color: "text-rental-trust-green"
     },
@@ -81,15 +59,15 @@ const OwnerDashboard = () => {
     {
       title: "Bookings Today",
       value: stats.activeBookings.toString(),
-      change: "+25%",
-      changeType: "positive" as const,
+      change: "",
+      changeType: "neutral" as const,
       icon: Calendar,
       color: "text-rental-lime-500"
     },
     {
       title: "Avg Rating",
       value: stats.averageRating,
-      change: "⭐⭐⭐⭐⭐",
+      change: "",
       changeType: "neutral" as const,
       icon: TrendingUp,
       color: "text-rental-trust-yellow"

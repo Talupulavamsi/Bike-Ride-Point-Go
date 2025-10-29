@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import NotificationSystem from "./NotificationSystem";
+import { useFirebase } from '@/contexts/FirebaseContext';
+import ProfileSettings from "@/components/ProfileSettings";
 
 interface DashboardHeaderProps {
   userRole: 'owner' | 'user';
@@ -19,11 +21,12 @@ interface DashboardHeaderProps {
 
 const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const navigate = useNavigate();
+  const { user, userProfile, logout } = useFirebase();
 
-  // Mock user data - in real app this would come from auth context
-  const userId = userRole === 'owner' ? 'owner-1' : 'user-1';
-  const userName = userRole === 'owner' ? 'Rajesh Kumar' : 'Arjun Sharma';
+  const userId = user?.uid || '';
+  const userName = userProfile?.name || (userRole === 'owner' ? 'Owner' : 'Rider');
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -31,7 +34,7 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+    <header className="sticky top-0 z-40 border-b border-gray-200 bg-gradient-to-r from-rental-teal-500 to-rental-lime-500">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Title */}
@@ -40,12 +43,12 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
               className="flex items-center space-x-3 cursor-pointer"
               onClick={() => handleNavigation('/')}
             >
-              <div className="w-8 h-8 bg-gradient-to-r from-rental-teal-500 to-rental-lime-500 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">R</span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-rental-navy-800">RidePoint</h1>
-                <p className="text-xs text-rental-navy-500 capitalize">
+                <h1 className="text-xl font-bold text-white">RidePoint</h1>
+                <p className="text-xs text-white/90 capitalize">
                   {userRole} Dashboard
                 </p>
               </div>
@@ -58,6 +61,7 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
               variant="ghost"
               size="sm"
               onClick={() => handleNavigation('/')}
+              className="text-white hover:bg-white/20"
             >
               <Home className="w-4 h-4 mr-2" />
               Home
@@ -67,25 +71,26 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
 
             {/* User Menu */}
             <div className="flex items-center space-x-3">
-              <div className="text-right">
-                <p className="text-sm font-medium text-rental-navy-800">{userName}</p>
-                <Badge variant="outline" className="text-xs">
+              <div className="text-right cursor-pointer" onClick={() => setShowProfile(true)}>
+                <p className="text-sm font-medium text-white">{userName}</p>
+                <Badge variant="outline" className="text-xs bg-white/10 text-white border-white/30">
                   {userRole === 'owner' ? 'Vehicle Owner' : 'Rider'}
                 </Badge>
               </div>
-              <div className="w-8 h-8 bg-rental-teal-100 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-rental-teal-600" />
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center cursor-pointer" onClick={() => setShowProfile(true)}>
+                <User className="w-4 h-4 text-white" />
               </div>
             </div>
 
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" className="text-white hover:bg-white/20">
               <Settings className="w-4 h-4" />
             </Button>
 
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => handleNavigation('/')}
+              onClick={async () => { await logout(); handleNavigation('/'); }}
+              className="text-white hover:bg-white/20"
             >
               <LogOut className="w-4 h-4" />
             </Button>
@@ -141,11 +146,36 @@ const DashboardHeader = ({ userRole }: DashboardHeaderProps) => {
               <Button 
                 variant="ghost" 
                 className="w-full justify-start"
-                onClick={() => handleNavigation('/')}
+                onClick={async () => { await logout(); handleNavigation('/'); }}
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
+            </div>
+          </div>
+        )}
+        {/* Profile Modal */}
+        {showProfile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowProfile(false)} />
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
+              <div className="flex items-center justify-between px-6 py-4 border-b">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-rental-teal-100 rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-rental-teal-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Signed in as</p>
+                    <p className="text-base font-semibold text-gray-900">{userName}</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowProfile(false)}>
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+              <div className="p-6">
+                <ProfileSettings userRole={userRole === 'owner' ? 'owner' : 'renter'} />
+              </div>
             </div>
           </div>
         )}

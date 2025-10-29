@@ -21,7 +21,7 @@ const VehicleDiscovery = () => {
     },
     price: vehicle.price,
     rating: vehicle.rating,
-    distance: Math.random() * 2, // Mock distance
+    distance: 0,
     isAvailable: vehicle.isAvailable && vehicle.status === 'available',
     isOnline: vehicle.gpsStatus === 'active',
     owner: vehicle.ownerName,

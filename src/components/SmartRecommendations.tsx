@@ -13,60 +13,31 @@ import {
   Battery,
   Star
 } from "lucide-react";
+import { useAppStore } from "@/hooks/useAppStore";
 
 const SmartRecommendations = () => {
-  const recommendations = [
-    {
-      id: "rec1",
-      type: "recommended",
-      title: "Perfect for Your Commute",
+  const { getAvailableVehicles } = useAppStore();
+  const available = getAvailableVehicles();
+  const top = available
+    .filter(v => v.isAvailable)
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    .slice(0, 3)
+    .map((v, idx) => ({
+      id: v.id,
+      type: idx === 0 ? 'recommended' : 'trending',
+      title: idx === 0 ? 'Top Pick For You' : 'Popular Now',
       vehicle: {
-        name: "Hero Splendor Plus",
-        type: "bike",
-        price: 150,
-        rating: 4.8,
-        distance: 0.3,
-        owner: "Rajesh Kumar",
-        location: "MG Road, Bangalore",
-        features: ["Fuel Efficient", "Well Maintained"]
+        name: v.name,
+        type: v.type,
+        price: v.price,
+        rating: v.rating || 0,
+        distance: 0,
+        owner: v.ownerName,
+        location: v.location,
+        features: v.features || []
       },
-      reason: "Based on your frequent MG Road trips"
-    },
-    {
-      id: "rec2", 
-      type: "trending",
-      title: "Trending This Weekend",
-      vehicle: {
-        name: "Ather 450X",
-        type: "scooter",
-        price: 200,
-        rating: 4.9,
-        distance: 0.5,
-        battery: 85,
-        owner: "Amit Patel",
-        location: "Commercial Street",
-        features: ["Electric", "Fast Charging"]
-      },
-      reason: "High demand in your area"
-    },
-    {
-      id: "rec3",
-      type: "price_drop",
-      title: "Price Drop Alert",
-      vehicle: {
-        name: "Maruti Swift",
-        type: "car",
-        price: 700,
-        originalPrice: 800,
-        rating: 4.6,
-        distance: 0.8,
-        owner: "Priya Singh",
-        location: "Brigade Road",
-        features: ["AC", "Bluetooth", "GPS"]
-      },
-      reason: "₹100 off your favorite car type"
-    }
-  ];
+      reason: ''
+    }));
 
   const getVehicleIcon = (type: string) => {
     switch (type) {
@@ -105,7 +76,10 @@ const SmartRecommendations = () => {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {recommendations.map((rec) => (
+          {top.length === 0 && (
+            <div className="text-sm text-rental-navy-500">No recommendations available.</div>
+          )}
+          {top.map((rec) => (
             <Card key={rec.id} className={`border-2 ${getRecommendationColor(rec.type)}`}>
               <CardContent className="p-4">
                 {/* Recommendation Header */}
@@ -138,27 +112,12 @@ const SmartRecommendations = () => {
                       <MapPin className="w-3 h-3 text-rental-navy-400" />
                       <span>{rec.vehicle.distance}km</span>
                     </div>
-                    {rec.vehicle.battery && (
-                      <div className="flex items-center space-x-1">
-                        <Battery className="w-3 h-3 text-rental-trust-green" />
-                        <span>{rec.vehicle.battery}%</span>
-                      </div>
-                    )}
+                    {/* Battery removed to avoid mock fields */}
                   </div>
 
                   {/* Price */}
                   <div className="flex items-center justify-between">
-                    <div>
-                      {rec.vehicle.originalPrice && (
-                        <span className="text-xs text-gray-400 line-through">₹{rec.vehicle.originalPrice}</span>
-                      )}
-                      <div className="font-bold text-rental-navy-800">₹{rec.vehicle.price}/day</div>
-                    </div>
-                    {rec.vehicle.originalPrice && (
-                      <Badge variant="secondary" className="bg-red-100 text-red-700 text-xs">
-                        Save ₹{rec.vehicle.originalPrice - rec.vehicle.price}
-                      </Badge>
-                    )}
+                    <div className="font-bold text-rental-navy-800">₹{rec.vehicle.price}/day</div>
                   </div>
 
                   {/* Features */}
@@ -171,7 +130,9 @@ const SmartRecommendations = () => {
                   </div>
 
                   {/* Reason */}
-                  <p className="text-xs text-rental-navy-500 italic">{rec.reason}</p>
+                  {rec.reason && (
+                    <p className="text-xs text-rental-navy-500 italic">{rec.reason}</p>
+                  )}
 
                   {/* Action */}
                   <Button size="sm" className="w-full bg-rental-teal-500 hover:bg-rental-teal-600">
@@ -183,22 +144,7 @@ const SmartRecommendations = () => {
           ))}
         </div>
 
-        {/* AI Insights */}
-        <div className="mt-6 bg-gradient-to-r from-rental-teal-50 to-rental-lime-50 p-4 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-4 h-4 text-rental-teal-500" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-rental-navy-800 mb-1">Today's AI Insights</h4>
-              <ul className="text-sm text-rental-navy-600 space-y-1">
-                <li>• Peak demand expected between 2-4 PM in your area</li>
-                <li>• Electric vehicles are 15% cheaper today due to government incentives</li>
-                <li>• Weekend rates are 20% lower for advance bookings</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        {/* No static insights to avoid mock data */}
       </CardContent>
     </Card>
   );

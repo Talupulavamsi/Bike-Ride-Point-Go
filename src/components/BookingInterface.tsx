@@ -7,15 +7,16 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Car, Bike, MapPin, Star, Calendar as CalendarIcon, Clock, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { useVehicleStore } from "@/hooks/useVehicleStore";
+import { useAppStore } from "@/hooks/useAppStore";
 import { useRenterStore } from "@/hooks/useRenterStore";
 
 const BookingInterface = () => {
   const { toast } = useToast();
-  const { vehicles } = useVehicleStore();
+  const { getAvailableVehicles, isVehicleAvailable, cancelBooking } = useAppStore();
   const { addBooking, getActiveBookings, getBookingHistory, renter } = useRenterStore();
   
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -24,9 +25,11 @@ const BookingInterface = () => {
   const [activeTab, setActiveTab] = useState<"browse" | "bookings">("browse");
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleVehicles, setVisibleVehicles] = useState(10);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [availabilityText, setAvailabilityText] = useState<string>("");
 
   // Filter available vehicles based on search query
-  const filteredVehicles = vehicles.filter(vehicle => 
+  const filteredVehicles = getAvailableVehicles().filter(vehicle => 
     vehicle.isAvailable && (
       vehicle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -52,7 +55,23 @@ const BookingInterface = () => {
     return basePrice;
   };
 
-  const handleBookVehicle = () => {
+  const computeEndDate = (start: Date, duration: string): Date => {
+    const end = new Date(start);
+    const parts = duration.split(" ");
+    const qty = parseInt(parts[0], 10);
+    const unit = parts[1];
+    if (isNaN(qty)) return end;
+    if (unit.startsWith("hour")) {
+      end.setHours(end.getHours() + qty);
+    } else if (unit.startsWith("day")) {
+      end.setDate(end.getDate() + qty - 1); // inclusive day range
+    } else if (unit.startsWith("week")) {
+      end.setDate(end.getDate() + qty * 7 - 1);
+    }
+    return end;
+  };
+
+  const handleBookVehicle = async () => {
     if (!selectedVehicle || !selectedDate || !selectedDuration || !renter) {
       toast({
         title: "Error",
@@ -62,18 +81,33 @@ const BookingInterface = () => {
       return;
     }
 
+    const start = selectedDate;
+    const end = computeEndDate(selectedDate, selectedDuration);
+
+    const availability = await isVehicleAvailable(selectedVehicle.id, start, end);
+    if (!availability.ok) {
+      const cs = availability.conflict?.startDate ? format(availability.conflict.startDate, "PPP") : "start";
+      const ce = availability.conflict?.endDate ? format(availability.conflict.endDate, "PPP") : "end";
+      toast({
+        title: "Not Available",
+        description: `The vehicle is already booked for these dates (${cs} to ${ce}). Choose another date or vehicle.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     const totalAmount = calculateTotal(selectedVehicle.price, selectedDuration);
     
     // Create booking
-    const newBooking = addBooking({
+    const newBooking = await addBooking({
       vehicleId: selectedVehicle.id,
       vehicleName: selectedVehicle.name,
       vehicleType: selectedVehicle.type,
-      ownerName: "Vehicle Owner", // This should come from vehicle owner data
-      ownerId: selectedVehicle.ownerId || "owner-1",
-      startDate: selectedDate,
-      endDate: selectedDate,
-      pickupTime: format(selectedDate, "PPP"),
+      ownerName: selectedVehicle.ownerName,
+      ownerId: selectedVehicle.ownerId,
+      startDate: start,
+      endDate: end,
+      pickupTime: `${format(start, "PPP")} - ${format(end, "PPP")}`,
       duration: selectedDuration,
       totalAmount,
       status: "upcoming",
@@ -84,17 +118,12 @@ const BookingInterface = () => {
     setSelectedVehicle(null);
     setSelectedDate(undefined);
     setSelectedDuration("");
+    setDetailsOpen(false);
     
     // Show success message with animation
     toast({
       title: "🎉 Booking Confirmed!",
-      description: (
-        <div className="space-y-2">
-          <p className="font-semibold">{selectedVehicle.name} booked successfully!</p>
-          <p className="text-sm">Duration: {selectedDuration} | Total: ₹{totalAmount}</p>
-          <p className="text-xs text-gray-600">Check your bookings tab for details</p>
-        </div>
-      )
+      description: `Booking confirmed from ${format(start, "PPP")} to ${format(end, "PPP")}.`
     });
 
     // Automatically switch to bookings tab
@@ -185,7 +214,13 @@ const BookingInterface = () => {
                     className={`cursor-pointer transition-all hover:shadow-md ${
                       selectedVehicle?.id === vehicle.id ? 'border-rental-teal-500 bg-rental-teal-50' : ''
                     }`}
-                    onClick={() => setSelectedVehicle(vehicle)}
+                    onClick={() => {
+                      setSelectedVehicle(vehicle);
+                      setSelectedDate(undefined);
+                      setSelectedDuration("");
+                      setAvailabilityText("");
+                      setDetailsOpen(true);
+                    }}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -243,7 +278,7 @@ const BookingInterface = () => {
                 <CardContent className="space-y-4">
                   {/* Date Picker */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Select Date</label>
+                    <label className="block text-sm font-medium mb-2">Select Start Date</label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full justify-start">
@@ -255,7 +290,9 @@ const BookingInterface = () => {
                         <Calendar
                           mode="single"
                           selected={selectedDate}
-                          onSelect={setSelectedDate}
+                          onSelect={(d) => {
+                            setSelectedDate(d);
+                          }}
                           disabled={(date) => date < new Date()}
                         />
                       </PopoverContent>
@@ -281,7 +318,7 @@ const BookingInterface = () => {
                   </div>
 
                   {/* Price Calculation */}
-                  {selectedDuration && (
+                  {selectedDuration && selectedDate && (
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <div className="flex justify-between">
                         <span>Base Price:</span>
@@ -290,6 +327,12 @@ const BookingInterface = () => {
                       <div className="flex justify-between">
                         <span>Duration:</span>
                         <span>{selectedDuration}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Dates:</span>
+                        <span>
+                          {format(selectedDate, "PPP")} → {selectedDuration ? format(computeEndDate(selectedDate, selectedDuration), "PPP") : format(selectedDate, "PPP")}
+                        </span>
                       </div>
                       <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2">
                         <span>Total:</span>
@@ -318,6 +361,101 @@ const BookingInterface = () => {
           </div>
         </div>
       )}
+
+      {/* Vehicle Details Dialog */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedVehicle?.name || 'Vehicle Details'}</DialogTitle>
+            <DialogDescription>
+              {availabilityText || 'Select a start date to check availability.'}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedVehicle && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-500">Type:</span> <span className="font-medium">{selectedVehicle.type}</span></div>
+                <div><span className="text-gray-500">Location:</span> <span className="font-medium">{selectedVehicle.location}</span></div>
+                <div><span className="text-gray-500">Model:</span> <span className="font-medium">{selectedVehicle.model || 'N/A'}</span></div>
+                <div><span className="text-gray-500">CC:</span> <span className="font-medium">{selectedVehicle.cc || 'N/A'}</span></div>
+                <div><span className="text-gray-500">Color:</span> <span className="font-medium">{selectedVehicle.color || 'N/A'}</span></div>
+                <div><span className="text-gray-500">Rent/Day:</span> <span className="font-medium">₹{selectedVehicle.price}</span></div>
+              </div>
+              {selectedVehicle.description && (
+                <p className="text-sm text-gray-700">{selectedVehicle.description}</p>
+              )}
+
+              {/* Inline booking controls inside dialog */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Select Start Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start">
+                        <CalendarIcon className="w-4 h-4 mr-2" />
+                        {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={async (d) => {
+                          setSelectedDate(d);
+                          // Check same-day availability hint
+                          if (selectedVehicle && d) {
+                            const res = await isVehicleAvailable(selectedVehicle.id, d, d);
+                            if (!res.ok && res.conflict) {
+                              setAvailabilityText(`This vehicle is booked from ${format(res.conflict.startDate, 'PPP')} to ${format(res.conflict.endDate, 'PPP')}. It is not available during these dates.`);
+                            } else {
+                              setAvailabilityText('Available');
+                            }
+                          }
+                        }}
+                        disabled={(date) => date < new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Duration</label>
+                  <Select onValueChange={setSelectedDuration}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select duration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2 hours">2 hours</SelectItem>
+                      <SelectItem value="4 hours">4 hours</SelectItem>
+                      <SelectItem value="8 hours">8 hours</SelectItem>
+                      <SelectItem value="1 day">1 day</SelectItem>
+                      <SelectItem value="2 days">2 days</SelectItem>
+                      <SelectItem value="1 week">1 week</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedDuration && selectedDate && (
+                  <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                    <div className="flex justify-between">
+                      <span>Dates:</span>
+                      <span>{format(selectedDate, 'PPP')} → {format(computeEndDate(selectedDate, selectedDuration), 'PPP')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total:</span>
+                      <span>₹{calculateTotal(selectedVehicle.price, selectedDuration)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <Button className="w-full" disabled={!selectedDate || !selectedDuration} onClick={handleBookVehicle}>
+                  {availabilityText && availabilityText !== 'Available' ? 'Not Available' : 'Book Now'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* My Bookings Tab */}
       {activeTab === "bookings" && (
@@ -360,6 +498,20 @@ const BookingInterface = () => {
                             onClick={() => markAsCompleted(booking.id)}
                           >
                             Complete Ride
+                          </Button>
+                        )}
+                        {(booking.status === "upcoming" || booking.status === "active") && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="mt-2 ml-2"
+                            onClick={async () => {
+                              const ok = window.confirm('Are you sure you want to cancel?');
+                              if (!ok) return;
+                              await cancelBooking({ id: booking.id, vehicleId: booking.vehicleId, slotId: (booking as any).slotId, slotIds: (booking as any).slotIds });
+                            }}
+                          >
+                            Cancel Booking
                           </Button>
                         )}
                       </div>

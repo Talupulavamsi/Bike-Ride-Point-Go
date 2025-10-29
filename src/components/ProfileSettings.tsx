@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import VehicleOwnerProfile from "./VehicleOwnerProfile";
 import { useVehicleStore } from "@/hooks/useVehicleStore";
+import { useFirebase } from "@/contexts/FirebaseContext";
+import { useRenterStore } from "@/hooks/useRenterStore";
 
 interface ProfileSettingsProps {
   userRole: 'renter' | 'owner' | null;
@@ -28,16 +30,18 @@ interface ProfileSettingsProps {
 
 const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
   const { owner, stats } = useVehicleStore();
+  const { userProfile } = useFirebase();
+  const { stats: renterStats } = useRenterStore();
   
   const [profileData, setProfileData] = useState({
-    name: owner?.name || 'Rajesh Kumar',
-    email: owner?.email || 'rajesh.kumar@email.com',
-    phone: owner?.phone || '+91 98765 43210',
-    location: owner?.location || 'Bangalore, Karnataka',
-    joinDate: owner?.joinDate || 'January 2024',
-    verified: owner?.verified || true,
-    aadhaar: owner?.aadhaar || '****-****-1234',
-    license: owner?.license || 'KA02-****-5678'
+    name: userProfile?.name || owner?.name || '',
+    email: userProfile?.email || owner?.email || '',
+    phone: userProfile?.phone || owner?.phone || '',
+    location: userProfile?.location || owner?.location || '',
+    joinDate: userProfile?.createdAt || owner?.joinDate || '',
+    verified: (userProfile?.kycCompleted ?? owner?.verified) || false,
+    aadhaar: userProfile?.aadhaar || owner?.aadhaar || '',
+    license: userProfile?.license || owner?.license || ''
   });
 
   const userStats = userRole === 'owner' 
@@ -48,10 +52,9 @@ const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
         rating: stats.averageRating
       }
     : {
-        totalRides: 24,
-        totalSpent: '₹3,200',
-        savedMoney: '₹8,500',
-        rating: 4.9
+        totalRides: renterStats.totalBookings,
+        totalSpent: `₹${(renterStats.totalSpent || 0).toLocaleString()}`,
+        rating: renterStats.averageRating
       };
 
   return (
@@ -110,10 +113,6 @@ const ProfileSettings = ({ userRole }: ProfileSettingsProps) => {
                     <div className="text-center">
                       <p className="text-2xl font-bold text-rental-trust-green">{userStats.totalSpent}</p>
                       <p className="text-sm text-rental-navy-600">Total Spent</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-rental-lime-600">{userStats.savedMoney}</p>
-                      <p className="text-sm text-rental-navy-600">Money Saved</p>
                     </div>
                     <div className="text-center">
                       <p className="text-2xl font-bold text-rental-trust-yellow">{userStats.rating}</p>

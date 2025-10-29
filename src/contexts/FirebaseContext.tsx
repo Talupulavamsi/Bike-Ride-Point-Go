@@ -1,9 +1,8 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 interface UserProfile {
   uid: string;
@@ -25,6 +24,8 @@ interface UserProfile {
   totalRides?: number;
   totalSpent?: number;
 }
+
+type User = { uid: string; email: string } | null;
 
 interface FirebaseContextType {
   user: User | null;
@@ -53,134 +54,62 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      
-      if (user) {
-        try {
-          // First check if user is in owners collection
-          const ownerDoc = doc(db, 'owners', user.uid);
-          const ownerSnap = await getDoc(ownerDoc);
-          
-          if (ownerSnap.exists()) {
-            setUserProfile({ uid: user.uid, ...ownerSnap.data() } as UserProfile);
-          } else {
-            // Check users collection
-            const userDoc = doc(db, 'users', user.uid);
-            const userSnap = await getDoc(userDoc);
-            
-            if (userSnap.exists()) {
-              setUserProfile({ uid: user.uid, ...userSnap.data() } as UserProfile);
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
+    // In-memory provider: no backend session, start unauthenticated
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const baseUser: User = { uid: fbUser.uid, email: fbUser.email || '' };
+        setUser(baseUser);
+        const ref = doc(db, 'users', fbUser.uid);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setUserProfile(snap.data() as UserProfile);
+        } else {
+          setUserProfile(null);
         }
       } else {
+        setUser(null);
         setUserProfile(null);
       }
-      
       setLoading(false);
     });
-
-    return unsubscribe;
+    return () => unsub();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully signed in.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign in failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    }
+    await signInWithEmailAndPassword(auth, email, password);
+    toast({ title: 'Signed in', description: 'You are now signed in.' });
   };
 
   const signUp = async (email: string, password: string, profileData: Omit<UserProfile, 'uid' | 'createdAt'>) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // Prepare profile data with defaults based on role
-      const completeProfileData: Omit<UserProfile, 'uid'> = {
-        ...profileData,
-        createdAt: new Date().toISOString(),
-        ...(profileData.role === 'owner' ? {
-          totalVehicles: 0,
-          totalEarnings: 0,
-          averageRating: 5.0
-        } : {
-          totalRides: 0,
-          totalSpent: 0
-        })
-      };
-
-      // Store in appropriate collection based on role
-      const collection = profileData.role === 'owner' ? 'owners' : 'users';
-      const userDoc = doc(db, collection, user.uid);
-      await setDoc(userDoc, completeProfileData);
-
-      toast({
-        title: "Account created!",
-        description: `Welcome to the vehicle rental platform as ${profileData.role}.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign up failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    }
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const uid = cred.user.uid;
+    const completeProfileData: UserProfile = {
+      uid,
+      createdAt: new Date().toISOString(),
+      ...profileData,
+      ...(profileData.role === 'owner'
+        ? { totalVehicles: 0, totalEarnings: 0, averageRating: 5.0 }
+        : { totalRides: 0, totalSpent: 0 }),
+    };
+    await setDoc(doc(db, 'users', uid), completeProfileData);
+    setUser({ uid, email });
+    setUserProfile(completeProfileData);
+    toast({ title: 'Account created', description: `Welcome as ${profileData.role}.` });
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!user || !userProfile) return;
-
-    try {
-      const collection = userProfile.role === 'owner' ? 'owners' : 'users';
-      const userDoc = doc(db, collection, user.uid);
-      await setDoc(userDoc, updates, { merge: true });
-      
-      setUserProfile(prev => prev ? { ...prev, ...updates } : null);
-      
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been successfully updated.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Update failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    }
+    const ref = doc(db, 'users', user.uid);
+    await updateDoc(ref, updates as Record<string, unknown>);
+    setUserProfile(prev => (prev ? { ...prev, ...updates } : prev));
+    toast({ title: 'Profile updated', description: 'Your profile has been updated.' });
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-      setUserProfile(null);
-      toast({
-        title: "Signed out",
-        description: "You have been successfully signed out.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign out failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
-    }
+    await signOut(auth);
+    setUser(null);
+    setUserProfile(null);
+    toast({ title: 'Signed out', description: 'You have been signed out.' });
   };
 
   const value = {

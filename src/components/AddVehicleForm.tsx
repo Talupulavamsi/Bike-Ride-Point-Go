@@ -22,6 +22,9 @@ const AddVehicleForm = () => {
     vehicleType: "" as "bike" | "scooter" | "car" | "",
     price: "",
     location: "",
+    model: "",
+    cc: "",
+    color: "",
     description: "",
     image: ""
   });
@@ -54,6 +57,10 @@ const AddVehicleForm = () => {
         type: vehicleData.vehicleType as "bike" | "scooter" | "car",
         price: parseInt(vehicleData.price),
         location: vehicleData.location,
+        model: vehicleData.model || undefined,
+        cc: vehicleData.cc || undefined,
+        color: vehicleData.color || undefined,
+        description: vehicleData.description || undefined,
         isAvailable: true,
         rating: 5.0,
         totalBookings: 0,
@@ -72,6 +79,9 @@ const AddVehicleForm = () => {
         vehicleType: "",
         price: "",
         location: "",
+        model: "",
+        cc: "",
+        color: "",
         description: "",
         image: ""
       });
@@ -150,6 +160,36 @@ const AddVehicleForm = () => {
               value={vehicleData.location}
               onChange={(e) => setVehicleData({...vehicleData, location: e.target.value})}
               placeholder="e.g. MG Road, Bangalore"
+              disabled={isSubmitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="vehicleModel">Model (Optional)</Label>
+            <Input
+              id="vehicleModel"
+              value={vehicleData.model}
+              onChange={(e) => setVehicleData({...vehicleData, model: e.target.value})}
+              placeholder="e.g. 2022 Deluxe"
+              disabled={isSubmitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="vehicleCC">Engine CC (Optional)</Label>
+            <Input
+              id="vehicleCC"
+              value={vehicleData.cc}
+              onChange={(e) => setVehicleData({...vehicleData, cc: e.target.value})}
+              placeholder="e.g. 110cc / 1200cc"
+              disabled={isSubmitting}
+            />
+          </div>
+          <div>
+            <Label htmlFor="vehicleColor">Color (Optional)</Label>
+            <Input
+              id="vehicleColor"
+              value={vehicleData.color}
+              onChange={(e) => setVehicleData({...vehicleData, color: e.target.value})}
+              placeholder="e.g. Red"
               disabled={isSubmitting}
             />
           </div>

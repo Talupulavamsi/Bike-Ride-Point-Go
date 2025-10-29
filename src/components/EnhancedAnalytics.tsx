@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -27,40 +27,49 @@ import {
   Calendar,
   DollarSign
 } from "lucide-react";
+import { useVehicleStore } from "@/hooks/useVehicleStore";
 
 const EnhancedAnalytics = () => {
   const [activeTab, setActiveTab] = useState("performance");
+  const { vehicles, bookings, stats } = useVehicleStore();
 
-  const conversionData = [
-    { month: "Jan", views: 1200, bookings: 180, rate: 15 },
-    { month: "Feb", views: 1400, bookings: 220, rate: 16 },
-    { month: "Mar", views: 1600, bookings: 280, rate: 18 },
-    { month: "Apr", views: 1800, bookings: 340, rate: 19 },
-    { month: "May", views: 2000, bookings: 420, rate: 21 },
-    { month: "Jun", views: 2200, bookings: 480, rate: 22 }
-  ];
+  // Build monthly aggregates from real bookings (last 6 months)
+  const monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const conversionData = useMemo(() => {
+    const now = new Date();
+    const buckets: { [k: string]: { month: string; bookings: number; revenue: number } } = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      buckets[key] = { month: `${monthLabels[d.getMonth()]}`, bookings: 0, revenue: 0 };
+    }
+    bookings.forEach(b => {
+      const d = new Date(b.startDate);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (key in buckets) {
+        buckets[key].bookings += 1;
+        buckets[key].revenue += b.totalAmount || 0;
+      }
+    });
+    return Object.values(buckets);
+  }, [bookings]);
 
-  const tripDurationData = [
-    { duration: "< 1hr", count: 45, percentage: 25 },
-    { duration: "1-3hrs", count: 72, percentage: 40 },
-    { duration: "3-6hrs", count: 36, percentage: 20 },
-    { duration: "6-12hrs", count: 18, percentage: 10 },
-    { duration: "> 12hrs", count: 9, percentage: 5 }
-  ];
+  // Build booking status distribution
+  const statusDistribution = useMemo(() => {
+    const counts: Record<string, number> = {};
+    bookings.forEach(b => { counts[b.status] = (counts[b.status] || 0) + 1; });
+    const colors = ["#0EA5E9","#10B981","#F59E0B","#EF4444","#8B5CF6"];
+    return Object.entries(counts).map(([status, count], idx) => ({ segment: status, value: count, color: colors[idx % colors.length] }));
+  }, [bookings]);
 
-  const renterReturnData = [
-    { segment: "New Users", value: 35, color: "#0EA5E9" },
-    { segment: "Returning (2-5 trips)", value: 45, color: "#10B981" },
-    { segment: "Loyal (5+ trips)", value: 20, color: "#F59E0B" }
-  ];
-
-  const vehiclePerformance = [
-    { vehicle: "Hero Splendor", bookings: 45, revenue: 6750, rating: 4.8, efficiency: 95 },
-    { vehicle: "Ather 450X", bookings: 38, revenue: 7600, rating: 4.9, efficiency: 92 },
-    { vehicle: "Maruti Swift", bookings: 32, revenue: 25600, rating: 4.6, efficiency: 88 },
-    { vehicle: "Honda Activa", bookings: 28, revenue: 4200, rating: 4.7, efficiency: 85 },
-    { vehicle: "TVS Apache", bookings: 15, revenue: 2250, rating: 4.4, efficiency: 65 }
-  ];
+  // Vehicle ranking from real vehicles
+  const vehiclePerformance = useMemo(() => vehicles.map(v => ({
+    vehicle: v.name,
+    bookings: v.totalBookings || 0,
+    revenue: v.totalEarnings || 0,
+    rating: v.rating || 0,
+    efficiency: 0,
+  })).sort((a,b) => b.revenue - a.revenue), [vehicles]);
 
   const COLORS = ['#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
@@ -79,21 +88,21 @@ const EnhancedAnalytics = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="conversion">Conversion</TabsTrigger>
-          <TabsTrigger value="behavior">User Behavior</TabsTrigger>
+          <TabsTrigger value="conversion">Monthly</TabsTrigger>
+          <TabsTrigger value="behavior">Status Mix</TabsTrigger>
           <TabsTrigger value="vehicles">Vehicle Ranking</TabsTrigger>
         </TabsList>
 
         <TabsContent value="performance" className="space-y-6">
-          {/* KPI Cards */}
+          {/* KPI Cards from real data */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-rental-navy-500">Booking Conversion</p>
-                    <p className="text-2xl font-bold text-rental-navy-800">22%</p>
-                    <p className="text-sm text-rental-trust-green">+3% from last month</p>
+                    <p className="text-sm text-rental-navy-500">Total Bookings</p>
+                    <p className="text-2xl font-bold text-rental-navy-800">{bookings.length}</p>
+                    <p className="text-sm text-rental-navy-400">All time</p>
                   </div>
                   <Target className="w-8 h-8 text-rental-trust-green" />
                 </div>
@@ -103,9 +112,9 @@ const EnhancedAnalytics = () => {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-rental-navy-500">Avg Trip Duration</p>
-                    <p className="text-2xl font-bold text-rental-navy-800">2.5hrs</p>
-                    <p className="text-sm text-rental-trust-green">+15min from last month</p>
+                    <p className="text-sm text-rental-navy-500">Total Earnings</p>
+                    <p className="text-2xl font-bold text-rental-navy-800">₹{conversionData.reduce((s,d)=>s+d.revenue,0).toLocaleString()}</p>
+                    <p className="text-sm text-rental-navy-400">Sum of bookings</p>
                   </div>
                   <Clock className="w-8 h-8 text-rental-teal-500" />
                 </div>
@@ -115,9 +124,9 @@ const EnhancedAnalytics = () => {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-rental-navy-500">Return Rate</p>
-                    <p className="text-2xl font-bold text-rental-navy-800">65%</p>
-                    <p className="text-sm text-rental-trust-green">+8% from last month</p>
+                    <p className="text-sm text-rental-navy-500">Available Vehicles</p>
+                    <p className="text-2xl font-bold text-rental-navy-800">{vehicles.filter(v=>v.isAvailable).length}</p>
+                    <p className="text-sm text-rental-navy-400">Out of {vehicles.length}</p>
                   </div>
                   <Users className="w-8 h-8 text-rental-lime-500" />
                 </div>
@@ -127,9 +136,9 @@ const EnhancedAnalytics = () => {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-rental-navy-500">Fleet Efficiency</p>
-                    <p className="text-2xl font-bold text-rental-navy-800">89%</p>
-                    <p className="text-sm text-rental-trust-green">+5% from last month</p>
+                    <p className="text-sm text-rental-navy-500">Avg Rating</p>
+                    <p className="text-2xl font-bold text-rental-navy-800">{stats.averageRating}</p>
+                    <p className="text-sm text-rental-navy-400">Across fleet</p>
                   </div>
                   <Award className="w-8 h-8 text-rental-trust-yellow" />
                 </div>
@@ -141,7 +150,7 @@ const EnhancedAnalytics = () => {
         <TabsContent value="conversion" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Booking Conversion Trends</CardTitle>
+              <CardTitle>Monthly Bookings & Earnings</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -151,9 +160,8 @@ const EnhancedAnalytics = () => {
                   <YAxis yAxisId="left" />
                   <YAxis yAxisId="right" orientation="right" />
                   <Tooltip />
-                  <Bar yAxisId="left" dataKey="views" fill="#0EA5E9" name="Views" />
                   <Bar yAxisId="left" dataKey="bookings" fill="#10B981" name="Bookings" />
-                  <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#F59E0B" strokeWidth={3} name="Conversion Rate %" />
+                  <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#F59E0B" strokeWidth={3} name="Revenue (₹)" />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -164,22 +172,22 @@ const EnhancedAnalytics = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>Trip Duration Distribution</CardTitle>
+                <CardTitle>Booking Status Distribution</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <PieChart>
                     <Pie
-                      data={tripDurationData}
+                      data={statusDistribution}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ duration, percentage }) => `${duration}: ${percentage}%`}
+                      label={({ segment, value }) => `${segment}: ${value}` as any}
                       outerRadius={80}
                       fill="#8884d8"
-                      dataKey="count"
+                      dataKey="value"
                     >
-                      {tripDurationData.map((entry, index) => (
+                      {statusDistribution.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -191,23 +199,17 @@ const EnhancedAnalytics = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>User Segments</CardTitle>
+                <CardTitle>Statuses</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="90%" data={renterReturnData}>
-                    <RadialBar dataKey="value" fill="#8884d8" />
-                    <Tooltip />
-                  </RadialBarChart>
-                </ResponsiveContainer>
-                <div className="mt-4 space-y-2">
-                  {renterReturnData.map((segment, index) => (
+                <div className="space-y-2">
+                  {statusDistribution.map((segment, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: segment.color }}></div>
                         <span className="text-sm">{segment.segment}</span>
                       </div>
-                      <span className="text-sm font-semibold">{segment.value}%</span>
+                      <span className="text-sm font-semibold">{segment.value}</span>
                     </div>
                   ))}
                 </div>

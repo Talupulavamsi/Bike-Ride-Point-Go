@@ -1,23 +1,7 @@
 
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  getDoc, 
-  query, 
-  where, 
-  orderBy,
-  onSnapshot,
-  Timestamp,
-  runTransaction,
-  serverTimestamp
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+// In-memory mock database and pub/sub utilities
+type Unsubscribe = () => void;
 
-// Vehicle interface for Firestore
 export interface FirebaseVehicle {
   id?: string;
   name: string;
@@ -31,15 +15,19 @@ export interface FirebaseVehicle {
   totalEarnings: number;
   lastBooked: string;
   image?: string;
+  // Extended descriptive fields
+  model?: string;
+  cc?: string;
+  color?: string;
+  description?: string;
   gpsStatus: 'active' | 'inactive';
   ownerId: string;
   ownerName: string;
   features: string[];
-  source: 'user-submitted' | 'admin-added';
-  createdAt: Timestamp;
+  source?: 'user-submitted' | 'admin-added';
+  createdAt: Date;
 }
 
-// Booking interface for Firestore
 export interface FirebaseBooking {
   id?: string;
   vehicleId: string;
@@ -49,341 +37,221 @@ export interface FirebaseBooking {
   renterName: string;
   ownerId: string;
   ownerName: string;
-  startDate: Timestamp;
-  endDate: Timestamp;
+  startDate: Date;
+  endDate: Date;
   pickupTime: string;
   duration: string;
   totalAmount: number;
   status: 'upcoming' | 'active' | 'completed' | 'cancelled';
   location: string;
-  createdAt: Timestamp;
+  slotId?: string;
+  slotIds?: string[];
+  createdAt: Date;
 }
 
-// Vehicle operations
+const mem = {
+  vehicles: new Map<string, FirebaseVehicle>(),
+  bookings: new Map<string, FirebaseBooking>(),
+};
+
+const listeners = {
+  vehicles: new Set<(all: FirebaseVehicle[]) => void>(),
+  ownerVehicles: new Map<string, Set<(list: FirebaseVehicle[]) => void>>(),
+  ownerBookings: new Map<string, Set<(list: FirebaseBooking[]) => void>>(),
+  renterBookings: new Map<string, Set<(list: FirebaseBooking[]) => void>>(),
+};
+
+function emitVehicles() {
+  const all = Array.from(mem.vehicles.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  listeners.vehicles.forEach(cb => cb(all.filter(v => v.status === 'available' && v.isAvailable)));
+  // per-owner
+  listeners.ownerVehicles.forEach((set, ownerId) => {
+    const list = all.filter(v => v.ownerId === ownerId);
+    set.forEach(cb => cb(list));
+  });
+}
+
+function emitBookings() {
+  const all = Array.from(mem.bookings.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  listeners.ownerBookings.forEach((set, ownerId) => {
+    const list = all.filter(b => b.ownerId === ownerId);
+    set.forEach(cb => cb(list));
+  });
+  listeners.renterBookings.forEach((set, renterId) => {
+    const list = all.filter(b => b.renterId === renterId);
+    set.forEach(cb => cb(list));
+  });
+}
+
+function genId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+}
+
 export const vehicleService = {
-  // Add a new vehicle with automatic owner registration
-  async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt' | 'source'>): Promise<string> {
-    return await runTransaction(db, async (transaction) => {
-      // Check if user exists as an owner, if not create owner profile
-      const ownerRef = doc(db, 'owners', vehicleData.ownerId);
-      const ownerDoc = await transaction.get(ownerRef);
-      
-      if (!ownerDoc.exists()) {
-        // Auto-register user as owner by copying from users collection
-        const userRef = doc(db, 'users', vehicleData.ownerId);
-        const userDoc = await transaction.get(userRef);
-        
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // Create owner profile from user data
-          transaction.set(ownerRef, {
-            ...userData,
-            role: 'owner',
-            totalVehicles: 1,
-            totalEarnings: 0,
-            averageRating: 5.0,
-            joinedAsOwner: serverTimestamp(),
-            source: 'user-submitted'
-          });
-        }
-      } else {
-        // Update vehicle count for existing owner
-        const ownerData = ownerDoc.data();
-        transaction.update(ownerRef, {
-          totalVehicles: (ownerData.totalVehicles || 0) + 1
-        });
-      }
-      
-      // Add the vehicle with correct schema
-      const vehicleRef = doc(collection(db, 'vehicles'));
-      transaction.set(vehicleRef, {
-        vehicleName: vehicleData.name,
-        vehicleType: vehicleData.type,
-        price: vehicleData.price,
-        location: vehicleData.location,
-        status: 'available',
-        isAvailable: true,
-        rating: vehicleData.rating,
-        totalBookings: vehicleData.totalBookings,
-        totalEarnings: vehicleData.totalEarnings,
-        lastBooked: vehicleData.lastBooked,
-        image: vehicleData.image,
-        gpsStatus: vehicleData.gpsStatus,
-        ownerId: vehicleData.ownerId,
-        ownerName: vehicleData.ownerName,
-        features: vehicleData.features,
-        source: 'user-submitted',
-        createdAt: serverTimestamp()
-      });
-      
-      return vehicleRef.id;
-    });
+  async addVehicle(vehicleData: Omit<FirebaseVehicle, 'id' | 'createdAt' | 'source' | 'status' | 'isAvailable'>): Promise<string> {
+    const id = genId('veh');
+    const v: FirebaseVehicle = {
+      id,
+      ...vehicleData,
+      status: 'available',
+      isAvailable: true,
+      source: 'user-submitted',
+      createdAt: new Date(),
+    };
+    mem.vehicles.set(id, v);
+    emitVehicles();
+    return id;
   },
 
-  // Get all available vehicles for users
   async getAvailableVehicles(): Promise<FirebaseVehicle[]> {
-    const q = query(
-      collection(db, 'vehicles'), 
-      where('status', '==', 'available'),
-      where('isAvailable', '==', true),
-      orderBy('createdAt', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      name: doc.data().vehicleName || doc.data().name,
-      type: doc.data().vehicleType || doc.data().type,
-      ...doc.data()
-    } as FirebaseVehicle));
+    return Array.from(mem.vehicles.values()).filter(v => v.status === 'available' && v.isAvailable)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
-  // Get vehicles by owner - fetch all vehicles where ownerId matches current user
   async getVehiclesByOwner(ownerId: string): Promise<FirebaseVehicle[]> {
-    const q = query(
-      collection(db, 'vehicles'), 
-      where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      name: doc.data().vehicleName || doc.data().name,
-      type: doc.data().vehicleType || doc.data().type,
-      ...doc.data()
-    } as FirebaseVehicle));
+    return Array.from(mem.vehicles.values()).filter(v => v.ownerId === ownerId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
-  // Update vehicle status (for booking/availability)
   async updateVehicleStatus(vehicleId: string, status: 'available' | 'booked' | 'maintenance'): Promise<void> {
-    const vehicleRef = doc(db, 'vehicles', vehicleId);
-    await updateDoc(vehicleRef, { 
-      status,
-      isAvailable: status === 'available',
-      lastBooked: status === 'booked' ? 'Currently booked' : 'Recently completed'
-    });
+    const v = mem.vehicles.get(vehicleId);
+    if (!v) return;
+    v.status = status;
+    v.isAvailable = status === 'available';
+    v.lastBooked = status === 'booked' ? 'Currently booked' : 'Recently completed';
+    mem.vehicles.set(vehicleId, { ...v });
+    emitVehicles();
   },
 
-  // Update vehicle details
   async updateVehicle(vehicleId: string, updates: Partial<FirebaseVehicle>): Promise<void> {
-    const vehicleRef = doc(db, 'vehicles', vehicleId);
-    await updateDoc(vehicleRef, updates);
+    const v = mem.vehicles.get(vehicleId);
+    if (!v) return;
+    mem.vehicles.set(vehicleId, { ...v, ...updates });
+    emitVehicles();
   },
 
-  // Delete vehicle
   async deleteVehicle(vehicleId: string): Promise<void> {
-    await deleteDoc(doc(db, 'vehicles', vehicleId));
+    mem.vehicles.delete(vehicleId);
+    emitVehicles();
   },
 
-  // Real-time listener for available vehicles (for users)
-  onAvailableVehiclesChange(callback: (vehicles: FirebaseVehicle[]) => void) {
-    const q = query(
-      collection(db, 'vehicles'), 
-      where('status', '==', 'available'),
-      where('isAvailable', '==', true),
-      orderBy('createdAt', 'desc')
-    );
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const vehicles = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().vehicleName || doc.data().name,
-        type: doc.data().vehicleType || doc.data().type,
-        ...doc.data()
-      } as FirebaseVehicle));
-      callback(vehicles);
-    });
+  onAvailableVehiclesChange(callback: (vehicles: FirebaseVehicle[]) => void): Unsubscribe {
+    listeners.vehicles.add(callback);
+    // emit current
+    callback(Array.from(mem.vehicles.values()).filter(v => v.status === 'available' && v.isAvailable)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+    return () => listeners.vehicles.delete(callback);
   },
 
-  // Real-time listener for owner's vehicles - no role filtering, just ownerId
-  onOwnerVehiclesChange(ownerId: string, callback: (vehicles: FirebaseVehicle[]) => void) {
-    const q = query(
-      collection(db, 'vehicles'), 
-      where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const vehicles = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().vehicleName || doc.data().name,
-        type: doc.data().vehicleType || doc.data().type,
-        ...doc.data()
-      } as FirebaseVehicle));
-      callback(vehicles);
-    });
+  onOwnerVehiclesChange(ownerId: string, callback: (vehicles: FirebaseVehicle[]) => void): Unsubscribe {
+    if (!listeners.ownerVehicles.has(ownerId)) listeners.ownerVehicles.set(ownerId, new Set());
+    const set = listeners.ownerVehicles.get(ownerId)!;
+    set.add(callback);
+    callback(Array.from(mem.vehicles.values()).filter(v => v.ownerId === ownerId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+    return () => set.delete(callback);
   }
 };
 
-// Booking operations with vehicle locking
 export const bookingService = {
-  // Create a new booking with transaction to prevent double booking
   async createBooking(bookingData: Omit<FirebaseBooking, 'id' | 'createdAt'>): Promise<string> {
-    return await runTransaction(db, async (transaction) => {
-      // First check if vehicle is still available
-      const vehicleRef = doc(db, 'vehicles', bookingData.vehicleId);
-      const vehicleDoc = await transaction.get(vehicleRef);
-      
-      if (!vehicleDoc.exists()) {
-        throw new Error('Vehicle not found');
-      }
-      
-      const vehicleData = vehicleDoc.data() as FirebaseVehicle;
-      if (vehicleData.status !== 'available' || !vehicleData.isAvailable) {
-        throw new Error('Vehicle is no longer available');
-      }
-      
-      // Create the booking
-      const bookingRef = doc(collection(db, 'bookings'));
-      transaction.set(bookingRef, {
-        ...bookingData,
-        createdAt: serverTimestamp()
-      });
-      
-      // Update vehicle status to booked
-      transaction.update(vehicleRef, {
-        status: 'booked',
-        isAvailable: false,
-        lastBooked: 'Currently booked'
-      });
-      
-      return bookingRef.id;
-    });
+    const vehicle = mem.vehicles.get(bookingData.vehicleId);
+    // If vehicle exists in memory, enforce availability; otherwise proceed (Firestore is authoritative)
+    if (vehicle) {
+      if (vehicle.status !== 'available' || !vehicle.isAvailable) throw new Error('Vehicle is no longer available');
+    }
+
+    const id = genId('book');
+    const b: FirebaseBooking = { id, ...bookingData, createdAt: new Date() };
+    mem.bookings.set(id, b);
+    if (vehicle) {
+      vehicle.status = 'booked';
+      vehicle.isAvailable = false;
+      vehicle.lastBooked = 'Currently booked';
+      // Update vehicle aggregates based on booking
+      vehicle.totalBookings = (vehicle.totalBookings || 0) + 1;
+      vehicle.totalEarnings = (vehicle.totalEarnings || 0) + (bookingData.totalAmount || 0);
+      mem.vehicles.set(vehicle.id!, { ...vehicle });
+    }
+    emitBookings();
+    emitVehicles();
+    return id;
   },
 
-  // Get bookings by renter (users)
   async getBookingsByRenter(renterId: string): Promise<FirebaseBooking[]> {
-    const q = query(
-      collection(db, 'bookings'), 
-      where('renterId', '==', renterId),
-      orderBy('createdAt', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as FirebaseBooking));
+    return Array.from(mem.bookings.values()).filter(b => b.renterId === renterId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
-  // Get bookings by owner
   async getBookingsByOwner(ownerId: string): Promise<FirebaseBooking[]> {
-    const q = query(
-      collection(db, 'bookings'), 
-      where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc')
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    } as FirebaseBooking));
+    return Array.from(mem.bookings.values()).filter(b => b.ownerId === ownerId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
-  // Complete a booking and make vehicle available again
   async completeBooking(bookingId: string): Promise<void> {
-    return await runTransaction(db, async (transaction) => {
-      const bookingRef = doc(db, 'bookings', bookingId);
-      const bookingDoc = await transaction.get(bookingRef);
-      
-      if (!bookingDoc.exists()) {
-        throw new Error('Booking not found');
-      }
-      
-      const booking = bookingDoc.data() as FirebaseBooking;
-      
-      // Update booking status
-      transaction.update(bookingRef, { status: 'completed' });
-      
-      // Make vehicle available again
-      const vehicleRef = doc(db, 'vehicles', booking.vehicleId);
-      transaction.update(vehicleRef, {
-        status: 'available',
-        isAvailable: true,
-        lastBooked: 'Recently completed'
-      });
-    });
+    const b = mem.bookings.get(bookingId);
+    if (!b) return;
+    b.status = 'completed';
+    mem.bookings.set(bookingId, { ...b });
+    const v = mem.vehicles.get(b.vehicleId);
+    if (v) {
+      v.status = 'available';
+      v.isAvailable = true;
+      v.lastBooked = 'Recently completed';
+      mem.vehicles.set(v.id!, { ...v });
+    }
+    emitBookings();
+    emitVehicles();
   },
 
-  // Update booking status
   async updateBookingStatus(bookingId: string, status: FirebaseBooking['status']): Promise<void> {
-    const bookingRef = doc(db, 'bookings', bookingId);
-    await updateDoc(bookingRef, { status });
-    
-    // If booking is completed, make vehicle available again
+    const b = mem.bookings.get(bookingId);
+    if (!b) return;
+    b.status = status;
+    mem.bookings.set(bookingId, { ...b });
     if (status === 'completed') {
-      const bookingDoc = await getDoc(bookingRef);
-      if (bookingDoc.exists()) {
-        const booking = bookingDoc.data() as FirebaseBooking;
-        await vehicleService.updateVehicleStatus(booking.vehicleId, 'available');
+      const v = mem.vehicles.get(b.vehicleId);
+      if (v) {
+        v.status = 'available';
+        v.isAvailable = true;
+        v.lastBooked = 'Recently completed';
+        mem.vehicles.set(v.id!, { ...v });
       }
     }
+    emitBookings();
+    emitVehicles();
   },
 
-  // Real-time listener for owner bookings
-  onOwnerBookingsChange(ownerId: string, callback: (bookings: FirebaseBooking[]) => void) {
-    const q = query(
-      collection(db, 'bookings'), 
-      where('ownerId', '==', ownerId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const bookings = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as FirebaseBooking));
-      callback(bookings);
-    });
+  onOwnerBookingsChange(ownerId: string, callback: (bookings: FirebaseBooking[]) => void): Unsubscribe {
+    if (!listeners.ownerBookings.has(ownerId)) listeners.ownerBookings.set(ownerId, new Set());
+    const set = listeners.ownerBookings.get(ownerId)!;
+    set.add(callback);
+    callback(Array.from(mem.bookings.values()).filter(b => b.ownerId === ownerId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+    return () => set.delete(callback);
   },
 
-  // Real-time listener for renter bookings
-  onRenterBookingsChange(renterId: string, callback: (bookings: FirebaseBooking[]) => void) {
-    const q = query(
-      collection(db, 'bookings'), 
-      where('renterId', '==', renterId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const bookings = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as FirebaseBooking));
-      callback(bookings);
-    });
+  onRenterBookingsChange(renterId: string, callback: (bookings: FirebaseBooking[]) => void): Unsubscribe {
+    if (!listeners.renterBookings.has(renterId)) listeners.renterBookings.set(renterId, new Set());
+    const set = listeners.renterBookings.get(renterId)!;
+    set.add(callback);
+    callback(Array.from(mem.bookings.values()).filter(b => b.renterId === renterId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+    return () => set.delete(callback);
   }
 };
 
-// Profile operations for role-based collections
 export const profileService = {
-  // Update owner statistics
-  async updateOwnerStats(ownerId: string, updates: {
-    totalVehicles?: number;
-    totalEarnings?: number;
-    averageRating?: number;
-  }): Promise<void> {
-    const ownerRef = doc(db, 'owners', ownerId);
-    await updateDoc(ownerRef, updates);
+  async updateOwnerStats(_ownerId: string, _updates: { totalVehicles?: number; totalEarnings?: number; averageRating?: number; }): Promise<void> {
+    return; // no-op in memory
   },
-
-  // Update user statistics  
-  async updateUserStats(userId: string, updates: {
-    totalRides?: number;
-    totalSpent?: number;
-    averageRating?: number;
-  }): Promise<void> {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, updates);
+  async updateUserStats(_userId: string, _updates: { totalRides?: number; totalSpent?: number; averageRating?: number; }): Promise<void> {
+    return; // no-op in memory
   },
-
-  // Get owner profile
-  async getOwnerProfile(ownerId: string) {
-    const ownerDoc = await getDoc(doc(db, 'owners', ownerId));
-    return ownerDoc.exists() ? ownerDoc.data() : null;
+  async getOwnerProfile(_ownerId: string) {
+    return null; // not persisted in memory service
   },
-
-  // Get user profile
-  async getUserProfile(userId: string) {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    return userDoc.exists() ? userDoc.data() : null;
+  async getUserProfile(_userId: string) {
+    return null;
   }
 };

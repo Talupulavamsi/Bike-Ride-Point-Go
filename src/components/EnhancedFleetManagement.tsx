@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,88 +28,29 @@ import {
   Zap,
   TrendingUp
 } from "lucide-react";
+import { useVehicleStore } from "@/hooks/useVehicleStore";
 
 const EnhancedFleetManagement = () => {
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
   const [bulkPriceUpdate, setBulkPriceUpdate] = useState("");
+  const { vehicles: ownerVehicles } = useVehicleStore();
 
-  const vehicles = [
-    {
-      id: "1",
-      name: "Hero Splendor Plus",
-      type: "bike",
-      status: "booked",
-      location: "MG Road, Bangalore",
-      battery: null,
-      lastBooked: "2 hours ago",
-      idleDays: 0,
-      currentPrice: 150,
-      totalEarnings: 6750,
-      gpsEnabled: true,
-      maintenanceStatus: "good",
-      utilizationRate: 85
-    },
-    {
-      id: "2",
-      name: "Maruti Swift",
-      type: "car",
-      status: "idle",
-      location: "Brigade Road, Bangalore",
-      battery: null,
-      lastBooked: "1 day ago",
-      idleDays: 1,
-      currentPrice: 800,
-      totalEarnings: 25600,
-      gpsEnabled: true,
-      maintenanceStatus: "good",
-      utilizationRate: 72
-    },
-    {
-      id: "3",
-      name: "Ather 450X",
-      type: "scooter",
-      status: "idle",
-      location: "Commercial Street, Bangalore",
-      battery: 85,
-      lastBooked: "5 hours ago",
-      idleDays: 0,
-      currentPrice: 200,
-      totalEarnings: 5600,
-      gpsEnabled: true,
-      maintenanceStatus: "good",
-      utilizationRate: 78
-    },
-    {
-      id: "4",
-      name: "Honda Activa",
-      type: "scooter",
-      status: "maintenance",
-      location: "Service Center",
-      battery: null,
-      lastBooked: "3 days ago",
-      idleDays: 3,
-      currentPrice: 180,
-      totalEarnings: 3240,
-      gpsEnabled: false,
-      maintenanceStatus: "service",
-      utilizationRate: 45
-    },
-    {
-      id: "5",
-      name: "TVS Apache",
-      type: "bike",
-      status: "idle",
-      location: "Koramangala, Bangalore",
-      battery: null,
-      lastBooked: "8 days ago",
-      idleDays: 8,
-      currentPrice: 160,
-      totalEarnings: 1920,
-      gpsEnabled: true,
-      maintenanceStatus: "alert",
-      utilizationRate: 25
-    }
-  ];
+  // Map real vehicles into display model with safe defaults (no randoms)
+  const vehicles = useMemo(() => ownerVehicles.map(v => ({
+    id: v.id,
+    name: v.name,
+    type: v.type,
+    status: v.isAvailable ? 'idle' : (v as any).status || 'booked',
+    location: v.location,
+    battery: null as number | null,
+    lastBooked: v.lastBooked || '',
+    idleDays: 0,
+    currentPrice: v.price,
+    totalEarnings: v.totalEarnings || 0,
+    gpsEnabled: v.gpsStatus === 'active',
+    maintenanceStatus: v.gpsStatus === 'active' ? 'good' : 'service',
+    utilizationRate: 0
+  })), [ownerVehicles]);
 
   const getVehicleIcon = (type: string) => {
     switch (type) {
@@ -225,7 +166,7 @@ const EnhancedFleetManagement = () => {
               <div>
                 <p className="text-sm text-rental-navy-500">Avg Utilization</p>
                 <p className="text-2xl font-bold text-rental-navy-800">
-                  {Math.round(vehicles.reduce((sum, v) => sum + v.utilizationRate, 0) / vehicles.length)}%
+                  {vehicles.length > 0 ? Math.round(vehicles.reduce((sum, v) => sum + v.utilizationRate, 0) / vehicles.length) : 0}%
                 </p>
               </div>
               <TrendingUp className="w-8 h-8 text-rental-lime-500" />

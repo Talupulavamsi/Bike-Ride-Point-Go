@@ -1,6 +1,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from './useAppStore';
+import { useFirebase } from '@/contexts/FirebaseContext';
 
 export interface RenterBooking {
   id: string;
@@ -36,47 +37,48 @@ const STORAGE_KEYS = {
 export const useRenterStore = () => {
   const [renter, setRenter] = useState<Renter | null>(null);
   const { getBookingsByRenter, createBooking, completeRide } = useAppStore();
+  const { user, userProfile, updateProfile } = useFirebase();
 
-  // Load renter data from localStorage on mount
+  // Load renter data from Firebase user profile (works even if user is also an owner)
   useEffect(() => {
-    const savedRenter = localStorage.getItem(STORAGE_KEYS.renter);
-
-    if (savedRenter) {
-      setRenter(JSON.parse(savedRenter));
+    if (user && userProfile) {
+      setRenter({
+        id: userProfile.uid,
+        name: userProfile.name,
+        email: userProfile.email,
+        phone: userProfile.phone || '',
+        totalRides: userProfile.totalRides || 0,
+        totalSpent: userProfile.totalSpent || 0,
+        averageRating: userProfile.averageRating || 0,
+      });
     } else {
-      // Set default renter data
-      const defaultRenter: Renter = {
-        id: 'renter-1',
-        name: 'Arjun Sharma',
-        email: 'arjun.sharma@email.com',
-        phone: '+91 98765 43210',
-        totalRides: 0,
-        totalSpent: 0,
-        averageRating: 5.0
-      };
-      setRenter(defaultRenter);
-      localStorage.setItem(STORAGE_KEYS.renter, JSON.stringify(defaultRenter));
+      setRenter(null);
     }
-  }, []);
+  }, [user, userProfile]);
 
-  const addBooking = useCallback((bookingData: Omit<RenterBooking, 'id' | 'bookingDate'>) => {
+  const addBooking = useCallback(async (bookingData: Omit<RenterBooking, 'id' | 'bookingDate'>) => {
     if (!renter) return null;
 
-    const newBooking = createBooking({
+    const newBooking = await createBooking({
       ...bookingData,
       renterId: renter.id,
       renterName: renter.name
     });
-    
-    // Update renter stats
+
+    // Update renter stats in profile (persisted)
+    const nextRides = (userProfile?.totalRides || 0) + 1;
+    const nextSpent = (userProfile?.totalSpent || 0) + bookingData.totalAmount;
+    await updateProfile({ totalRides: nextRides, totalSpent: nextSpent });
+
+    // Update local state view
     setRenter(prev => prev ? {
       ...prev,
-      totalRides: prev.totalRides + 1,
-      totalSpent: prev.totalSpent + bookingData.totalAmount
+      totalRides: nextRides,
+      totalSpent: nextSpent
     } : prev);
 
     return newBooking;
-  }, [createBooking, renter]);
+  }, [createBooking, renter, updateProfile, userProfile]);
 
   const updateBookingStatus = useCallback((bookingId: string, status: 'upcoming' | 'active' | 'completed' | 'cancelled') => {
     if (status === 'completed') {

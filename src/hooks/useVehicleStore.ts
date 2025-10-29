@@ -57,16 +57,16 @@ export const useVehicleStore = () => {
     ? allBookings.filter(b => b.ownerId === user.uid)
     : [];
 
-  // Use userProfile as owner data
+  // Use userProfile as owner data (no mock defaults)
   const owner = userProfile?.role === 'owner' ? {
     id: userProfile.uid,
     name: userProfile.name,
     email: userProfile.email,
     phone: userProfile.phone || '',
-    aadhaar: userProfile.aadhaar || '****-****-1234',
-    license: userProfile.license || 'KA02-****-5678',
-    location: userProfile.location || 'Bangalore, Karnataka',
-    joinDate: 'January 2024',
+    aadhaar: userProfile.aadhaar || '',
+    license: userProfile.license || '',
+    location: userProfile.location || '',
+    joinDate: userProfile.createdAt || '',
     verified: userProfile.kycCompleted
   } : null;
 

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Upload, AlertCircle, MapPin, Car } from "lucide-react";
 import { useFirebase } from "@/contexts/FirebaseContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface AuthModalProps {
   role: 'user' | 'owner' | null;
@@ -36,6 +37,7 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
   
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, updateProfile } = useFirebase();
+  const { toast } = useToast();
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -45,6 +47,10 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
     setLoading(true);
     try {
       await signIn(formData.email, formData.password);
+      toast({
+        title: "Logged in",
+        description: "You have signed in successfully.",
+      });
       onSuccess();
     } catch (error) {
       console.error('Login error:', error);
@@ -64,6 +70,10 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
         phone: formData.phone,
         role: role,
         kycCompleted: false
+      });
+      toast({
+        title: "Account created",
+        description: "Your account was created successfully.",
       });
 
       // Only proceed to KYC for users (renters)
@@ -97,6 +107,10 @@ const AuthModal = ({ role, onClose, onSuccess }: AuthModalProps) => {
         // Update KYC status in Firebase
         await updateProfile({
           kycCompleted: true
+        });
+        toast({
+          title: "Verification complete",
+          description: "Your identity has been verified.",
         });
         
         setTimeout(() => onSuccess(), 2000);

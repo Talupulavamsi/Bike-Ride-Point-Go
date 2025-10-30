@@ -31,18 +31,11 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
     location: ""
   });
 
-  // Check if user is authorized to add vehicles (must be owner)
-  const canAddVehicles = user && userProfile && userProfile.role === 'owner';
+  // Any authenticated user can add a vehicle; first add promotes to owner in useAppStore
+  const canAddVehicles = !!user;
 
   const handleAddVehicle = async () => {
-    if (!canAddVehicles) {
-      toast({
-        title: "Access Denied",
-        description: "Only vehicle owners can add vehicles",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!canAddVehicles) return;
 
     if (!newVehicle.name || !newVehicle.type || !newVehicle.price || !newVehicle.location) {
       toast({
@@ -126,7 +119,7 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
     userProfile && vehicle.ownerId === userProfile.uid
   );
 
-  // Don't render if user is not an owner
+  // Don't render if not signed in
   if (!canAddVehicles) {
     return null;
   }
@@ -151,12 +144,14 @@ const VehicleManagementModal = ({ trigger }: VehicleManagementModalProps) => {
               <Plus className="w-4 h-4 mr-2" />
               Add Vehicle
             </Button>
-            <Button
-              variant={activeTab === "manage" ? "default" : "outline"}
-              onClick={() => setActiveTab("manage")}
-            >
-              Manage Fleet ({ownerVehicles.length})
-            </Button>
+            {userProfile?.role === 'owner' && (
+              <Button
+                variant={activeTab === "manage" ? "default" : "outline"}
+                onClick={() => setActiveTab("manage")}
+              >
+                Manage Fleet ({ownerVehicles.length})
+              </Button>
+            )}
           </div>
 
           {/* Add Vehicle Tab */}

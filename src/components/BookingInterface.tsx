@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +15,8 @@ import { useRenterStore } from "@/hooks/useRenterStore";
 
 const BookingInterface = () => {
   const { toast } = useToast();
-  const { getAvailableVehicles, isVehicleAvailable, cancelBooking } = useAppStore();
+  const { getBrowseVehicles, getLockedVehicleIdsToday, getBookedDates, isVehicleAvailable, cancelBooking, rateVehicle } = useAppStore();
+
   const { addBooking, getActiveBookings, getBookingHistory, renter } = useRenterStore();
   
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -27,10 +27,20 @@ const BookingInterface = () => {
   const [visibleVehicles, setVisibleVehicles] = useState(10);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [availabilityText, setAvailabilityText] = useState<string>("");
+  const [bookedDates, setBookedDates] = useState<string[]>([]);
+  const [rateOpen, setRateOpen] = useState(false);
+  const [rateValue, setRateValue] = useState<number>(5);
+  const [rateTarget, setRateTarget] = useState<any>(null);
+  const [ratedIds, setRatedIds] = useState<Set<string>>(new Set());
+
+  const lockedToday = getLockedVehicleIdsToday();
+  const allVehicles = getBrowseVehicles();
+
+  const isNowAvailable = (v: any) => v.status === 'available' && v.isAvailable && !lockedToday.includes(v.id);
 
   // Filter available vehicles based on search query
-  const filteredVehicles = getAvailableVehicles().filter(vehicle => 
-    vehicle.isAvailable && (
+  const filteredVehicles = allVehicles.filter(vehicle => 
+    (
       vehicle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.location.toLowerCase().includes(searchQuery.toLowerCase())
@@ -157,6 +167,24 @@ const BookingInterface = () => {
     });
   };
 
+  const isPastEnd = (booking: any) => {
+    const end = booking.endDate?.toDate?.() || booking.endDate;
+    return end ? new Date(end).getTime() < Date.now() : false;
+  };
+
+  const promptRating = (booking: any) => {
+    setRateTarget(booking);
+    setRateValue(5);
+    setRateOpen(true);
+  };
+
+  const submitRating = async () => {
+    if (!rateTarget) return;
+    await rateVehicle(rateTarget.vehicleId, rateValue);
+    setRatedIds(prev => new Set(prev).add(rateTarget.id));
+    setRateOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -214,11 +242,13 @@ const BookingInterface = () => {
                     className={`cursor-pointer transition-all hover:shadow-md ${
                       selectedVehicle?.id === vehicle.id ? 'border-rental-teal-500 bg-rental-teal-50' : ''
                     }`}
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedVehicle(vehicle);
                       setSelectedDate(undefined);
                       setSelectedDuration("");
                       setAvailabilityText("");
+                      const dates = await getBookedDates(vehicle.id);
+                      setBookedDates(dates);
                       setDetailsOpen(true);
                     }}
                   >
@@ -241,7 +271,11 @@ const BookingInterface = () => {
                         <div className="text-right">
                           <p className="font-bold text-lg">₹{vehicle.price}</p>
                           <p className="text-sm text-gray-600">per day</p>
-                          <Badge variant="secondary" className="mt-1">Available</Badge>
+                          {isNowAvailable(vehicle) ? (
+                            <Badge variant="secondary" className="mt-1">Available</Badge>
+                          ) : (
+                            <Badge variant="destructive" className="mt-1">Not Available</Badge>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -317,6 +351,30 @@ const BookingInterface = () => {
                     </Select>
                   </div>
 
+                  {/* Availability and Booked Dates */}
+                  <div className="space-y-2">
+                    <div>
+                      {isNowAvailable(selectedVehicle) ? (
+                        <Badge variant="secondary">Available</Badge>
+                      ) : (
+                        <Badge variant="destructive">Not Available</Badge>
+                      )}
+                    </div>
+                    {bookedDates.length > 0 && (
+                      <div className="text-sm text-gray-700">
+                        <span className="font-medium">Booked Dates:</span>
+                        <div className="mt-1 grid grid-cols-2 gap-1">
+                          {bookedDates.slice(0, 12).map(d => (
+                            <span key={d} className="text-xs">{d}</span>
+                          ))}
+                        </div>
+                        {bookedDates.length > 12 && (
+                          <span className="text-xs text-gray-500">+ {bookedDates.length - 12} more</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Price Calculation */}
                   {selectedDuration && selectedDate && (
                     <div className="bg-gray-50 p-3 rounded-lg">
@@ -344,9 +402,9 @@ const BookingInterface = () => {
                   <Button 
                     onClick={handleBookVehicle} 
                     className="w-full"
-                    disabled={!selectedDate || !selectedDuration}
+                    disabled={!selectedDate || !selectedDuration || !isNowAvailable(selectedVehicle)}
                   >
-                    Book Now
+                    {isNowAvailable(selectedVehicle) ? 'Book Now' : 'Not Available'}
                   </Button>
                 </CardContent>
               </Card>
@@ -490,7 +548,20 @@ const BookingInterface = () => {
                           </Badge>
                         </div>
                         <p className="font-bold">₹{booking.totalAmount}</p>
-                        {booking.status === "active" && (
+                        {(booking.status === "active" || booking.status === "upcoming") && isPastEnd(booking) && (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="mt-2"
+                            onClick={() => {
+                              markAsCompleted(booking.id);
+                              promptRating(booking);
+                            }}
+                          >
+                            Mark Completed & Rate
+                          </Button>
+                        )}
+                        {booking.status === "active" && !isPastEnd(booking) && (
                           <Button 
                             size="sm" 
                             variant="outline" 

@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/contexts/FirebaseContext';
 import { vehicleService, bookingService, FirebaseVehicle, FirebaseBooking } from '@/services/firebaseService';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, increment, collection, onSnapshot, query, where, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, increment, collection, onSnapshot, query, where, setDoc, serverTimestamp, deleteDoc, getDocs, runTransaction, getDoc } from 'firebase/firestore';
 
 // Legacy interfaces for backward compatibility
 export interface GlobalVehicle {
@@ -104,6 +104,7 @@ const convertFirebaseBooking = (fbBooking: FirebaseBooking): GlobalBooking => ({
 export const useAppStore = () => {
   const [vehicles, setVehicles] = useState<GlobalVehicle[]>([]);
   const [availableVehicles, setAvailableVehicles] = useState<GlobalVehicle[]>([]);
+  const [browseVehicles, setBrowseVehicles] = useState<GlobalVehicle[]>([]);
   const [bookings, setBookings] = useState<GlobalBooking[]>([]);
   const [ownerBookings, setOwnerBookings] = useState<GlobalBooking[]>([]);
   const [renterBookings, setRenterBookings] = useState<GlobalBooking[]>([]);
@@ -117,6 +118,7 @@ export const useAppStore = () => {
     setLoading(true);
     let unsubscribeVehicles: (() => void) | undefined;
     let unsubscribeAvailable: (() => void) | undefined;
+    let unsubscribeBrowse: (() => void) | undefined;
     let unsubscribeBookingsOwner: (() => void) | undefined;
     let unsubscribeBookingsRenter: (() => void) | undefined;
     let unsubscribeLocksToday: (() => void) | undefined;
@@ -142,7 +144,7 @@ export const useAppStore = () => {
         setVehicles([]);
       }
 
-      // Always listen to globally available vehicles for renter browsing, regardless of role
+      // Always listen to globally available vehicles (kept for compatibility)
       const qAvail = query(
         collection(db, 'vehicles'),
         where('status', '==', 'available'),
@@ -157,6 +159,22 @@ export const useAppStore = () => {
           setAvailableVehicles(all.map(convertFirebaseVehicle));
         });
       });
+
+      // New: listen to all vehicles for renter browsing UI (so we can show Not Available too)
+      try {
+        unsubscribeBrowse = onSnapshot(collection(db, 'vehicles'), (snap) => {
+          const list: GlobalVehicle[] = snap.docs.map(d => convertFirebaseVehicle({ id: d.id, ...(d.data() as any) }));
+          setBrowseVehicles(list);
+        }, (err) => {
+          console.warn('Firestore browse vehicles listener error, falling back to available only:', err);
+          // Fallback to available list if all-vehicles fails
+          setBrowseVehicles(prev => {
+            return availableVehicles;
+          });
+        });
+      } catch (e) {
+        console.warn('Error setting browse vehicles listener', e);
+      }
 
       // Also listen to today's booking locks to exclude same-day booked vehicles from renter list
       try {
@@ -238,6 +256,7 @@ export const useAppStore = () => {
       unsubscribeBookingsOwner?.();
       unsubscribeBookingsRenter?.();
       unsubscribeLocksToday?.();
+      unsubscribeBrowse?.();
     };
   }, [user, userProfile]);
 
@@ -302,16 +321,28 @@ export const useAppStore = () => {
         throw e;
       }
 
-      // Ensure profile reflects ownership: set role to 'owner' and increment totalVehicles
+      // Ensure profile reflects ownership: create user doc if missing, set role to 'owner', and increment totalVehicles
       try {
         if (user) {
-          await updateDoc(doc(db, 'users', user.uid), {
-            totalVehicles: increment(1),
-          });
+          const userRef = doc(db, 'users', user.uid);
+          const snap = await getDoc(userRef);
+          if (!snap.exists()) {
+            await setDoc(userRef, {
+              uid: user.uid,
+              name: userProfile?.name || '',
+              email: userProfile?.email || '',
+              phone: userProfile?.phone || '',
+              role: 'owner',
+              kycCompleted: userProfile?.kycCompleted ?? false,
+              createdAt: new Date().toISOString(),
+              totalVehicles: 0,
+              totalEarnings: 0,
+              averageRating: 5.0,
+            }, { merge: true } as any);
+          }
+          await updateDoc(userRef, { totalVehicles: increment(1) });
         }
-        if (userProfile.role !== 'owner') {
-          await updateProfile({ role: 'owner' });
-        }
+        if (userProfile.role !== 'owner') await updateProfile({ role: 'owner' });
       } catch (e) {
         console.warn('Profile stats update failed', e);
       }
@@ -368,8 +399,17 @@ export const useAppStore = () => {
           });
           createdSlots.push(day.slotId);
         }
-      } catch (e) {
-        // Rollback created locks if any later lock fails
+      } catch (e: any) {
+        // If permission denied, surface the real cause
+        if (e?.code === 'permission-denied') {
+          toast({
+            title: 'Permission denied',
+            description: 'Your account is not allowed to create booking locks. Please sign in and check Firestore rules.',
+            variant: 'destructive'
+          });
+          throw e;
+        }
+        // Rollback created locks if any later lock fails (availability or other error)
         try {
           for (const sid of createdSlots) {
             await updateDoc(doc(db, 'bookingLocks', sid), { cancelledAt: serverTimestamp() });
@@ -544,30 +584,38 @@ export const useAppStore = () => {
 
   // Filtered getters
   const getAvailableVehicles = () => availableVehicles.filter(v => !lockedVehicleIdsToday.includes(v.id));
+  const getBrowseVehicles = () => browseVehicles;
 
   // Check overlap by querying bookings for a vehicle and verifying date ranges
   const isVehicleAvailable = useCallback(async (vehicleId: string, startDate: Date, endDate: Date): Promise<{ ok: boolean; conflict?: { startDate: Date; endDate: Date } }> => {
     try {
-      // Query all bookings for this vehicle where status is not cancelled
-      const snap = await (async () => {
-        const qAll = query(collection(db, 'bookings'), where('vehicleId', '==', vehicleId));
-        // Note: We filter status client-side to include upcoming/active
-        // (Avoids needing composite rules for multiple filters.)
-        return await new Promise<any>((resolve, reject) => {
-          onSnapshot(qAll, (s) => resolve(s), reject);
-        });
-      })();
-      const list = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) }))
-        .filter((b: any) => (b.status === 'upcoming' || b.status === 'active'));
       const s = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
       const e = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-      for (const b of list) {
-        const bs = (b.startDate?.toDate?.() || new Date(b.startDate));
-        const be = (b.endDate?.toDate?.() || new Date(b.endDate));
-        // Overlap if s <= be && e >= bs
-        if (s <= be && e >= bs) {
-          return { ok: false, conflict: { startDate: bs, endDate: be } };
-        }
+      const toISO = (d: Date) => {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      };
+
+      // Query bookingLocks for this vehicle (no date filters to avoid composite index requirement)
+      const qLocks = query(
+        collection(db, 'bookingLocks'),
+        where('vehicleId', '==', vehicleId)
+      );
+      const snap = await getDocs(qLocks);
+
+      const sISO = toISO(s);
+      const eISO = toISO(e);
+      const activeLocks = snap.docs
+        .map((d: any) => d.data() as any)
+        .filter((b: any) => !b.cancelledAt && b.date >= sISO && b.date <= eISO);
+
+      if (activeLocks.length > 0) {
+        const dates = activeLocks.map((b: any) => new Date(`${b.date}T00:00:00`));
+        const min = new Date(Math.min(...dates.map((d: Date) => d.getTime())));
+        const max = new Date(Math.max(...dates.map((d: Date) => d.getTime())));
+        return { ok: false, conflict: { startDate: min, endDate: max } };
       }
       return { ok: true };
     } catch (err) {
@@ -576,11 +624,53 @@ export const useAppStore = () => {
     }
   }, []);
   
+  // Utility: return today's locked vehicle IDs (used by UI badges)
+  const getLockedVehicleIdsToday = () => lockedVehicleIdsToday;
+
+  // Utility: fetch booked dates (active locks) for a vehicle
+  const getBookedDates = useCallback(async (vehicleId: string): Promise<string[]> => {
+    try {
+      const qLocks = query(
+        collection(db, 'bookingLocks'),
+        where('vehicleId', '==', vehicleId)
+      );
+      const snap = await getDocs(qLocks);
+      const dates = snap.docs
+        .map((d: any) => d.data() as any)
+        .filter((b: any) => !b.cancelledAt)
+        .map((b: any) => b.date as string);
+      // unique and sorted
+      const uniq = Array.from(new Set(dates)).sort();
+      return uniq;
+    } catch (e) {
+      return [];
+    }
+  }, []);
+  
   const getVehiclesByOwner = (ownerId: string) => vehicles.filter(v => v.ownerId === ownerId);
   
   const getBookingsByOwner = (ownerId: string) => ownerBookings.filter(b => b.ownerId === ownerId);
   
   const getBookingsByRenter = (renterId: string) => renterBookings.filter(b => b.renterId === renterId);
+
+  // Rate a vehicle (1-5): stores per-user rating and updates vehicle average rating and ratingCount
+  const rateVehicle = useCallback(async (vehicleId: string, rating: number) => {
+    if (!user) throw new Error('Must be logged in to rate');
+    if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5');
+    const vehRef = doc(db, 'vehicles', vehicleId);
+    const userRatingRef = doc(db, 'vehicles', vehicleId, 'ratings', user.uid);
+    await runTransaction(db as any, async (tx: any) => {
+      const vehSnap = await tx.get(vehRef);
+      const data = vehSnap.exists() ? vehSnap.data() as any : {};
+      const currentAvg = Number(data.rating || 0);
+      const currentCount = Number(data.ratingCount || 0);
+      const newCount = currentCount + 1;
+      const newAvg = Number(((currentAvg * currentCount + rating) / newCount).toFixed(2));
+      tx.update(vehRef, { rating: newAvg, ratingCount: newCount });
+      tx.set(userRatingRef, { rating, userId: user.uid, createdAt: serverTimestamp() }, { merge: true });
+    });
+    toast({ title: 'Thanks for rating!', description: 'Your feedback helps others choose better.' });
+  }, [db, toast, user]);
 
   return {
     vehicles,
@@ -595,9 +685,13 @@ export const useAppStore = () => {
     updateBookingStatus,
     cancelBooking,
     getAvailableVehicles,
+    getBrowseVehicles,
+    getLockedVehicleIdsToday,
     getVehiclesByOwner,
     getBookingsByOwner,
     getBookingsByRenter,
-    isVehicleAvailable
+    isVehicleAvailable,
+    getBookedDates,
+    rateVehicle
   };
 };

@@ -76,25 +76,46 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-    toast({ title: 'Signed in', description: 'You are now signed in.' });
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({ title: 'Signed in', description: 'You are now signed in.' });
+    } catch (e: any) {
+      const code = e?.code || '';
+      let message = 'Failed to sign in. Please try again.';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') message = 'Incorrect email or password.';
+      else if (code === 'auth/user-not-found') message = 'No account found with this email.';
+      else if (code === 'auth/too-many-requests') message = 'Too many attempts. Please try again later.';
+      else if (code === 'auth/invalid-email') message = 'Invalid email format.';
+      toast({ title: 'Sign-in error', description: message, variant: 'destructive' });
+      throw e;
+    }
   };
 
   const signUp = async (email: string, password: string, profileData: Omit<UserProfile, 'uid' | 'createdAt'>) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const uid = cred.user.uid;
-    const completeProfileData: UserProfile = {
-      uid,
-      createdAt: new Date().toISOString(),
-      ...profileData,
-      ...(profileData.role === 'owner'
-        ? { totalVehicles: 0, totalEarnings: 0, averageRating: 5.0 }
-        : { totalRides: 0, totalSpent: 0 }),
-    };
-    await setDoc(doc(db, 'users', uid), completeProfileData);
-    setUser({ uid, email });
-    setUserProfile(completeProfileData);
-    toast({ title: 'Account created', description: `Welcome as ${profileData.role}.` });
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = cred.user.uid;
+      const completeProfileData: UserProfile = {
+        uid,
+        createdAt: new Date().toISOString(),
+        ...profileData,
+        ...(profileData.role === 'owner'
+          ? { totalVehicles: 0, totalEarnings: 0, averageRating: 5.0 }
+          : { totalRides: 0, totalSpent: 0 }),
+      };
+      await setDoc(doc(db, 'users', uid), completeProfileData);
+      setUser({ uid, email });
+      setUserProfile(completeProfileData);
+      toast({ title: 'Account created', description: `Welcome as ${profileData.role}.` });
+    } catch (e: any) {
+      const code = e?.code || '';
+      let message = 'Failed to sign up. Please try again.';
+      if (code === 'auth/weak-password') message = 'Weak password. Please enter a stronger password (at least 6 characters).';
+      else if (code === 'auth/email-already-in-use') message = 'Email already in use. Try signing in or use another email.';
+      else if (code === 'auth/invalid-email') message = 'Invalid email format.';
+      toast({ title: 'Sign-up error', description: message, variant: 'destructive' });
+      throw e;
+    }
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {

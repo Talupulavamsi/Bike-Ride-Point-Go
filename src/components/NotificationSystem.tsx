@@ -8,7 +8,7 @@ import { useAppStore } from '@/hooks/useAppStore';
 
 interface Notification {
   id: string;
-  type: 'booking' | 'completion' | 'vehicle_added';
+  type: 'booking' | 'completion' | 'vehicle_added' | 'cancellation';
   title: string;
   message: string;
   timestamp: Date;
@@ -57,6 +57,36 @@ const NotificationSystem = ({ userRole, userId }: NotificationSystemProps) => {
           if (prev.some(n => n.message === notification.message)) return prev;
           return [notification, ...prev];
         });
+      }
+    }
+  }, [bookings, userRole, userId]);
+
+  // Monitor cancellations and notify renter/owner
+  useEffect(() => {
+    const latest = bookings[0];
+    if (!latest) return;
+    if (latest.status === 'cancelled') {
+      if (userRole === 'owner' && latest.ownerId === userId) {
+        const n: Notification = {
+          id: `cancel_owner_${latest.id}`,
+          type: 'cancellation',
+          title: 'Booking Cancelled',
+          message: `${latest.renterName} cancelled booking for ${latest.vehicleName}`,
+          timestamp: new Date(),
+          read: false,
+        };
+        setNotifications(prev => (prev.some(p => p.id === n.id) ? prev : [n, ...prev]));
+      }
+      if (userRole === 'user' && latest.renterId === userId) {
+        const n: Notification = {
+          id: `cancel_user_${latest.id}`,
+          type: 'cancellation',
+          title: 'Booking Cancelled',
+          message: `Your booking for ${latest.vehicleName} has been cancelled`,
+          timestamp: new Date(),
+          read: false,
+        };
+        setNotifications(prev => (prev.some(p => p.id === n.id) ? prev : [n, ...prev]));
       }
     }
   }, [bookings, userRole, userId]);
